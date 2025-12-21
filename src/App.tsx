@@ -20,8 +20,11 @@ const App: React.FC = () => {
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
 
   useEffect(() => {
-    // فحص المفتاح فور تشغيل التطبيق
-    ensureApiKey();
+    // محاولة التأكد من وجود مفتاح عند بدء التشغيل
+    const initKey = async () => {
+      await ensureApiKey();
+    };
+    initKey();
 
     const checkHash = () => {
         setIsAdmin(window.location.hash === '#admin');
