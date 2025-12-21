@@ -1,6 +1,9 @@
 
-// هذا الملف يدير مفاتيح الـ API ويدعم التبديل التلقائي والتحقق من الصلاحية
+/**
+ * هذا الملف يدير مفاتيح الـ API ويدعم التبديل التلقائي
+ */
 
+// دالة داخلية لجلب المفاتيح المتوفرة
 function getAvailableKeys(): string[] {
   const keys = [
     process.env.API_KEY,
@@ -9,7 +12,7 @@ function getAvailableKeys(): string[] {
     process.env.API_KEY_4,
     process.env.API_KEY_5
   ];
-  return keys.filter(key => key && key.trim().length > 0) as string[];
+  return keys.filter(key => key && key.trim().length > 5) as string[];
 }
 
 let currentKeyIndex = 0;
@@ -17,7 +20,7 @@ let currentKeyIndex = 0;
 /**
  * الحصول على مفتاح الـ API الحالي
  */
-export function getApiKey(): string {
+export const getApiKey = (): string => {
   const keys = getAvailableKeys();
   if (keys.length === 0) {
     return process.env.API_KEY || '';
@@ -26,46 +29,43 @@ export function getApiKey(): string {
     currentKeyIndex = 0;
   }
   return keys[currentKeyIndex];
-}
+};
 
 /**
  * تدوير المفتاح في حالة نفاذ الحصة
  */
-export function rotateApiKey(): boolean {
+export const rotateApiKey = (): boolean => {
   const keys = getAvailableKeys();
   if (keys.length <= 1) return false;
   currentKeyIndex = (currentKeyIndex + 1) % keys.length;
   console.log(`تم تدوير المفتاح إلى الفهرس: ${currentKeyIndex}`);
   return true;
-}
+};
 
 /**
- * حل جذري: دالة تضمن للمتصفح وجود مفتاح قبل بدء العملية
- * تقوم بفحص البيئة وفتح نافذة الاختيار إذا لزم الأمر
+ * التأكد من وجود مفتاح API صالح أو فتح نافذة الاختيار
  */
-export async function ensureApiKey(): Promise<boolean> {
+export const ensureApiKey = async (): Promise<boolean> => {
   const currentKey = getApiKey();
   
-  // إذا كان المفتاح موجوداً وطويلاً كفاية، نعتبره صالحاً مبدئياً
-  if (currentKey && currentKey.length > 5) {
+  if (currentKey && currentKey.length > 10) {
     return true;
   }
 
-  // التحقق من وجود واجهة AI Studio في المتصفح
+  // التحقق من وجود واجهة AI Studio (لبيئة التطوير)
   if (typeof window !== 'undefined' && (window as any).aistudio) {
     try {
       const hasKey = await (window as any).aistudio.hasSelectedApiKey();
       if (!hasKey) {
-        console.warn("API Key is missing, opening selection dialog...");
         await (window as any).aistudio.openSelectKey();
         return true; 
       }
       return true;
     } catch (err) {
-      console.error("Error checking/opening AI Studio Key Dialog", err);
+      console.error("AI Studio Key Error", err);
       return false;
     }
   }
   
   return false;
-}
+};
