@@ -1,8 +1,7 @@
 
-// This utility manages multiple API keys for failover/rotation.
-// It reads from process.env (polyfilled by Vite)
+// هذا الملف يدير مفاتيح الـ API ويدعم التبديل التلقائي والتحقق من الصلاحية
 
-const getAvailableKeys = () => {
+function getAvailableKeys(): string[] {
   const keys = [
     process.env.API_KEY,
     process.env.API_KEY_2,
@@ -10,33 +9,63 @@ const getAvailableKeys = () => {
     process.env.API_KEY_4,
     process.env.API_KEY_5
   ];
-  // Filter out undefined or empty keys
   return keys.filter(key => key && key.trim().length > 0) as string[];
-};
+}
 
-// Global state for the current key index
 let currentKeyIndex = 0;
 
-export const getApiKey = (): string => {
+/**
+ * الحصول على مفتاح الـ API الحالي
+ */
+export function getApiKey(): string {
   const keys = getAvailableKeys();
   if (keys.length === 0) {
-    console.error("No API Keys found in environment variables.");
-    return '';
+    return process.env.API_KEY || '';
   }
-  // Safety check to ensure index is within bounds
   if (currentKeyIndex >= keys.length) {
     currentKeyIndex = 0;
   }
   return keys[currentKeyIndex];
-};
+}
 
-export const rotateApiKey = (): boolean => {
+/**
+ * تدوير المفتاح في حالة نفاذ الحصة
+ */
+export function rotateApiKey(): boolean {
   const keys = getAvailableKeys();
-  if (keys.length <= 1) return false; // Can't rotate if only 1 or 0 keys
-
-  const previousIndex = currentKeyIndex;
+  if (keys.length <= 1) return false;
   currentKeyIndex = (currentKeyIndex + 1) % keys.length;
-  
-  console.log(`API Key rotated from index ${previousIndex} to ${currentKeyIndex}`);
+  console.log(`تم تدوير المفتاح إلى الفهرس: ${currentKeyIndex}`);
   return true;
-};
+}
+
+/**
+ * حل جذري: دالة تضمن للمتصفح وجود مفتاح قبل بدء العملية
+ * تقوم بفحص البيئة وفتح نافذة الاختيار إذا لزم الأمر
+ */
+export async function ensureApiKey(): Promise<boolean> {
+  const currentKey = getApiKey();
+  
+  // إذا كان المفتاح موجوداً وطويلاً كفاية، نعتبره صالحاً مبدئياً
+  if (currentKey && currentKey.length > 5) {
+    return true;
+  }
+
+  // التحقق من وجود واجهة AI Studio في المتصفح
+  if (typeof window !== 'undefined' && (window as any).aistudio) {
+    try {
+      const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+        console.warn("API Key is missing, opening selection dialog...");
+        await (window as any).aistudio.openSelectKey();
+        return true; 
+      }
+      return true;
+    } catch (err) {
+      console.error("Error checking/opening AI Studio Key Dialog", err);
+      return false;
+    }
+  }
+  
+  return false;
+}
