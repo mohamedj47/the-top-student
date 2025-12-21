@@ -3,7 +3,7 @@ import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender } f
 import { GoogleGenAI, Modality } from "@google/genai";
 import { questionsBank } from "../lib/questionsBank";
 import { DynamicQuestionBank } from "../lib/dynamicBank";
-import { getApiKey, rotateApiKey } from "../utils/apiKeyManager";
+import { getApiKey, rotateApiKey, ensureApiKey } from "../utils/apiKeyManager";
 
 const SYSTEM_INSTRUCTION = `
 أنت "المعلم الذكي"، خبير تعليمي متخصص في منهج الثانوية العامة المصرية.
@@ -78,6 +78,9 @@ export const generateStreamResponse = async (
   }
 
   try {
+    // حل جذري: التأكد من وجود مفتاح قبل بناء الـ Client
+    await ensureApiKey();
+    
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const modelName = options?.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
     
@@ -122,15 +125,19 @@ export const generateStreamResponse = async (
 
     return fullText || "عذراً، لم أتمكن من استنتاج الإجابة.";
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API Error:", error);
+    
+    // إذا كان الخطأ بسبب فقدان المفتاح أو صلاحيته، نفتح نافذة الاختيار للطالب
+    if (error?.message?.includes("API key") || error?.message?.includes("not found")) {
+        if (typeof window !== 'undefined' && (window as any).aistudio) {
+            await (window as any).aistudio.openSelectKey();
+        }
+    }
     throw error;
   }
 };
 
-/**
- * نظام النطق المستقر مع معالجة أخطاء الحصص (Quota 429)
- */
 export const streamSpeech = async (text: string, onAudioChunk: (base64: string) => void): Promise<void> => {
   const cleanText = sanitizeForTTS(text);
   if (!cleanText || cleanText.length < 2) return;
@@ -143,10 +150,11 @@ export const streamSpeech = async (text: string, onAudioChunk: (base64: string) 
     
     let success = false;
     let attempts = 0;
-    const maxAttempts = 3; // محاولة التبديل بين 3 مفاتيح بحد أقصى لكل مقطع
+    const maxAttempts = 3;
 
     while (!success && attempts < maxAttempts) {
       try {
+        await ensureApiKey();
         const ai = new GoogleGenAI({ apiKey: getApiKey() });
         const response = await ai.models.generateContent({
           model: "gemini-2.5-flash-preview-tts",
@@ -170,15 +178,15 @@ export const streamSpeech = async (text: string, onAudioChunk: (base64: string) 
         attempts++;
         const errorMessage = error?.message || "";
         
-        // إذا انتهت الحصة (Quota) أو حدث خطأ 429، نقوم بتدوير المفتاح فوراً
         if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("quota")) {
-          console.warn(`Quota exhausted for TTS key, rotating... (Attempt ${attempts})`);
           rotateApiKey();
-          // انتظار بسيط قبل المحاولة التالية
           await new Promise(resolve => setTimeout(resolve, 500));
+        } else if (errorMessage.includes("API key")) {
+          if (typeof window !== 'undefined' && (window as any).aistudio) {
+            await (window as any).aistudio.openSelectKey();
+            break; 
+          }
         } else {
-          // خطأ آخر غير الحصة، نتوقف عن محاولة هذا المقطع
-          console.error("TTS Non-Quota Error:", error);
           break;
         }
       }
