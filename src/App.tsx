@@ -1,67 +1,52 @@
+
 import React, { useState, useEffect } from 'react';
 import { GradeLevel, Subject } from './types';
 import { SubjectGrid } from './components/SubjectGrid';
 import { ChatInterface } from './components/ChatInterface';
 import { SubscriptionModal } from './components/SubscriptionModal';
 import { AdminGenerator } from './components/AdminGenerator';
-import { TutorialModal } from './components/TutorialModal'; // Import
+import { TutorialModal } from './components/TutorialModal';
 import { GraduationCap, School, Printer, LockKeyhole, Clock, AlertTriangle, HelpCircle } from 'lucide-react';
+import { ensureApiKey } from './utils/apiKeyManager';
 
 const App: React.FC = () => {
-  // State
   const [grade, setGrade] = useState<GradeLevel | null>(null);
   const [subject, setSubject] = useState<Subject | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  
-  // Trial State
   const [trialTimeLeft, setTrialTimeLeft] = useState<string>("");
   const [isTrialActive, setIsTrialActive] = useState(false);
   const [isCurrentGradeSubscribed, setIsCurrentGradeSubscribed] = useState(false);
-  
-  // Manual Subscription Modal State
   const [isManualSubscriptionOpen, setIsManualSubscriptionOpen] = useState(false);
-  
-  // Tutorial Modal State
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
 
-  // Check for Admin Route on Mount & Trial Calculation logic
   useEffect(() => {
-    // 1. Check Admin Hash
+    // فحص المفتاح فور تشغيل التطبيق
+    ensureApiKey();
+
     const checkHash = () => {
         setIsAdmin(window.location.hash === '#admin');
     };
     checkHash();
     window.addEventListener('hashchange', checkHash);
     
-    // --- GUARANTEE TRIAL START ON INSTALLATION/FIRST OPEN ---
-    // This ensures the 7-day countdown starts immediately when the user first opens the site,
-    // even if they stay on the home screen.
     if (!localStorage.getItem('trial_start_date')) {
         localStorage.setItem('trial_start_date', new Date().toISOString());
     }
-    // --------------------------------------------------------
 
-    // 2. Real-time Countdown Timer
     const timer = setInterval(() => {
-        // Global Trial Check
         let startStr = localStorage.getItem('trial_start_date');
-        
         if (startStr) {
             const startDate = new Date(startStr);
-            // Trial is 7 days
             const endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
             const now = new Date();
             const diff = endDate.getTime() - now.getTime();
 
             if (diff > 0) {
                 setIsTrialActive(true);
-                
-                // Calculate components (Fixed Countdown Format)
                 const days = Math.floor(diff / (1000 * 60 * 60 * 24));
                 const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                 const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
                 const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
                 setTrialTimeLeft(`${days} يوم : ${hours} ساعة : ${minutes} دقيقة : ${seconds} ثانية`);
             } else {
                 setIsTrialActive(false);
@@ -76,7 +61,6 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // Check Subscription Status whenever Grade changes
   useEffect(() => {
     if (grade) {
         const subscriptionKey = `subscription_expiry_${grade}`;
@@ -92,12 +76,10 @@ const App: React.FC = () => {
             setIsCurrentGradeSubscribed(false);
         }
     } else {
-        // Home screen
         setIsCurrentGradeSubscribed(false); 
     }
-  }, [grade, isManualSubscriptionOpen]); // Re-check when modal closes/opens or grade changes
+  }, [grade, isManualSubscriptionOpen]);
 
-  // Handlers
   const handleGradeSelect = (selectedGrade: GradeLevel) => {
     setGrade(selectedGrade);
   };
@@ -119,33 +101,27 @@ const App: React.FC = () => {
     window.print();
   };
 
-  // Toggle Admin Mode manually
   const toggleAdmin = () => {
     window.location.hash = '#admin';
   };
 
-  // RENDER ADMIN PANEL IF HASH MATCHES
   if (isAdmin) {
     return <AdminGenerator />;
   }
 
   return (
     <>
-      {/* Subscription Protection System */}
       <SubscriptionModal 
         forceOpen={isManualSubscriptionOpen}
         onClose={() => setIsManualSubscriptionOpen(false)}
         currentGrade={grade}
       />
       
-      {/* Tutorial / Help Modal */}
       <TutorialModal 
         isOpen={isTutorialOpen}
         onClose={() => setIsTutorialOpen(false)}
       />
       
-      {/* Trial Banner - Real-time Countdown */}
-      {/* Only show if trial is active AND we are NOT subscribed to the current grade */}
       {isTrialActive && !isCurrentGradeSubscribed && trialTimeLeft && (
           <div className="bg-indigo-600 text-white text-xs md:text-sm py-2 px-4 text-center font-bold flex items-center justify-center gap-2 no-print shadow-md dir-rtl" dir="rtl">
               <Clock size={16} className="text-yellow-300 animate-pulse" />
@@ -154,17 +130,14 @@ const App: React.FC = () => {
           </div>
       )}
 
-      {/* Render: Chat Mode */}
       {grade && subject ? (
         <ChatInterface 
             grade={grade} 
             subject={subject} 
             onBack={handleReset} 
-            // Only show Subscribe button if NOT subscribed to this grade
             onSubscribe={!isCurrentGradeSubscribed ? () => setIsManualSubscriptionOpen(true) : undefined}
         />
       ) : grade ? (
-        /* Render: Subject Selection Mode */
         <div className="min-h-screen bg-slate-50 flex flex-col">
           <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 md:py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm gap-2">
             <div className="flex items-center gap-2 md:gap-3 cursor-pointer overflow-hidden min-w-0" onClick={handleFullReset}>
@@ -204,7 +177,6 @@ const App: React.FC = () => {
             <div className="text-center mb-8 mt-4">
               <h2 className="text-2xl md:text-3xl font-black text-slate-800 mb-3">اختر المادة الدراسية</h2>
               <p className="text-base md:text-lg text-slate-500 font-medium">أنت الآن في {grade}</p>
-              {/* Show subscribe hint if not subscribed */}
               {!isCurrentGradeSubscribed && (
                  <button onClick={() => setIsManualSubscriptionOpen(true)} className="mt-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full animate-bounce">
                     اضغط هنا للاشتراك في هذا الصف
@@ -216,10 +188,8 @@ const App: React.FC = () => {
           </main>
         </div>
       ) : (
-        /* Render: Grade Selection Mode (Home) */
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50 flex flex-col items-center justify-center p-4 relative">
           
-          {/* Tutorial Button for Home Screen */}
           <button 
              onClick={() => setIsTutorialOpen(true)}
              className="absolute top-4 right-4 py-2 px-4 bg-white/80 backdrop-blur-sm text-slate-600 rounded-full shadow-sm hover:bg-white hover:text-indigo-600 transition-all z-20 flex items-center gap-2 font-bold text-sm"
@@ -229,7 +199,6 @@ const App: React.FC = () => {
              <span>كيف أستخدم التطبيق؟</span>
           </button>
 
-          {/* Print Button for Home Screen */}
           <button 
              onClick={handlePrint}
              className="absolute top-4 left-4 p-3 bg-white/80 backdrop-blur-sm text-slate-600 rounded-full shadow-sm hover:bg-white hover:text-indigo-600 transition-all z-20"
@@ -299,7 +268,6 @@ const App: React.FC = () => {
               </button>
             </div>
             
-            {/* DISCLAIMER SECTION - ADDED AS REQUESTED */}
             <div className="bg-amber-50 p-4 border-t border-amber-100 text-center">
                <div className="flex items-start justify-center gap-2 text-amber-800 text-xs leading-relaxed font-medium">
                   <AlertTriangle size={14} className="shrink-0 mt-0.5" />
@@ -310,10 +278,8 @@ const App: React.FC = () => {
             </div>
 
             <div className="bg-slate-50 p-5 text-center text-sm font-medium text-slate-400 border-t border-slate-100 flex justify-center items-center gap-2 relative">
-              {/* Updated footer text to reflect Gemini 3 model usage */}
               <span>مدعوم بتقنية Gemini 3 Flash للذكاء الاصطناعي</span>
               
-              {/* ADMIN BUTTON (VISIBLE NOW) */}
               <button 
                 onClick={toggleAdmin}
                 className="opacity-50 hover:opacity-100 transition-opacity p-2 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600"
