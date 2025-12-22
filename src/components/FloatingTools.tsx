@@ -1,123 +1,156 @@
 
-import React, { useState, useEffect } from 'react';
-import { Printer, Volume2, VolumeX } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Printer, Volume2, VolumeX, Loader2 } from 'lucide-react';
+import { streamSpeech, generateAiSpeech } from '../services/geminiService';
 
 export const FloatingTools: React.FC = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourcesRef = useRef<AudioBufferSourceNode[]>([]);
+  const nextStartTimeRef = useRef<number>(0);
+  const isSpeakingRef = useRef(false);
 
-  // Load voices on mount and when changed
   useEffect(() => {
-    const updateVoices = () => {
-      const vs = window.speechSynthesis.getVoices();
-      setVoices(vs);
-    };
-
-    updateVoices();
-    
-    if (window.speechSynthesis.onvoiceschanged !== undefined) {
-      window.speechSynthesis.onvoiceschanged = updateVoices;
-    }
-
     return () => {
-      window.speechSynthesis.onvoiceschanged = null;
+      stopAudio();
+      if (audioContextRef.current) audioContextRef.current.close();
     };
   }, []);
+
+  const stopAudio = () => {
+    isSpeakingRef.current = false;
+    sourcesRef.current.forEach(source => {
+      try { source.stop(); } catch (e) {}
+    });
+    sourcesRef.current = [];
+    setIsSpeaking(false);
+    setIsLoading(false);
+    nextStartTimeRef.current = 0;
+  };
 
   const handlePrint = () => {
     window.scrollTo(0, 0);
     window.print();
   };
 
-  const handleReadPage = () => {
-    // 1. Cancel current
-    window.speechSynthesis.cancel();
-    
-    // 2. Find text content (Smart Selection)
+  const scheduleChunk = (base64: string) => {
+    const ctx = audioContextRef.current;
+    if (!ctx) return;
+
+    try {
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const int16 = new Int16Array(bytes.buffer);
+      const float32 = new Float32Array(int16.length);
+      for (let i = 0; i < int16.length; i++) {
+        float32[i] = int16[i] / 32768.0;
+      }
+      const buffer = ctx.createBuffer(1, float32.length, 24000);
+      buffer.getChannelData(0).set(float32);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      const startTime = Math.max(ctx.currentTime, nextStartTimeRef.current);
+      source.start(startTime);
+      nextStartTimeRef.current = startTime + buffer.duration;
+      sourcesRef.current.push(source);
+      source.onended = () => {
+        const index = sourcesRef.current.indexOf(source);
+        if (index > -1) sourcesRef.current.splice(index, 1);
+        if (sourcesRef.current.length === 0 && ctx.currentTime >= nextStartTimeRef.current - 0.1) {
+          setIsSpeaking(false);
+          isSpeakingRef.current = false;
+        }
+      };
+    } catch (e) {
+      console.error("Schedule error", e);
+    }
+  };
+
+  const handleReadPage = async () => {
+    if (isSpeaking) {
+      stopAudio();
+      return;
+    }
+
+    // تجميع النص من الصفحة بشكل ذكي
     let textToRead = "";
-    
-    const botMessages = document.querySelectorAll('.markdown-body');
-    if (botMessages.length > 0) {
-        // Read the last bot explanation first if available
-        const lastMsg = botMessages[botMessages.length - 1] as HTMLElement;
-        textToRead = lastMsg.innerText;
+    const contentElements = document.querySelectorAll('.markdown-body');
+    if (contentElements.length > 0) {
+      contentElements.forEach(el => {
+        textToRead += (el as HTMLElement).innerText + " . ";
+      });
     } else {
-        const headers = document.querySelectorAll('h1, h2, h3');
-        headers.forEach(h => {
-             textToRead += (h as HTMLElement).innerText + ". ";
-        });
+      const mainHeaders = document.querySelectorAll('h1, h2, h3');
+      mainHeaders.forEach(h => {
+        textToRead += (h as HTMLElement).innerText + " . ";
+      });
     }
 
     if (!textToRead.trim()) return;
 
-    // 3. Clean Text
-    const cleanText = textToRead
-      .replace(/[*#`_\-]/g, '')
-      .replace(/https?:\/\/\S+/g, 'رابط')
-      .trim();
+    setIsLoading(true);
+    setIsSpeaking(true);
+    isSpeakingRef.current = true;
 
-    // 4. Utterance Setup
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.rate = 0.9; // Doctor Style: Calm and Explanatory
-    utterance.pitch = 1.0;
-    utterance.lang = 'ar-EG';
-    
-    // 5. Smart Voice Selection (Consistent with MessageBubble)
-    if (voices.length > 0) {
-        let selectedVoice = voices.find(v => v.lang === 'ar-EG' || v.lang === 'ar-SA');
-        
-        // Prioritize Female/Google Voices for the "Professor" effect
-        const googleVoice = voices.find(v => (v.lang.startsWith('ar')) && v.name.includes('Google'));
-        if (googleVoice) selectedVoice = googleVoice;
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+      nextStartTimeRef.current = audioContextRef.current.currentTime;
 
-        if (selectedVoice) {
-            utterance.voice = selectedVoice;
-            utterance.lang = selectedVoice.lang;
-        }
+      // Fix: Adjusting the call to use generateAiSpeech for high-quality audio
+      // and ensuring streamSpeech call matches its 2-argument signature.
+      const base64 = await generateAiSpeech(textToRead);
+      if (base64) {
+        setIsLoading(false);
+        scheduleChunk(base64);
+      } else {
+        setIsLoading(false);
+        await streamSpeech(textToRead, () => {
+          setIsSpeaking(false);
+          isSpeakingRef.current = false;
+        });
+      }
+    } catch (e) {
+      console.error("Global Read error", e);
+      stopAudio();
     }
-
-    // 6. Events
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = (e) => {
-        console.error("Speech Error:", e);
-        setIsSpeaking(false);
-    };
-
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const handleStopSpeaking = () => {
-    window.speechSynthesis.cancel();
-    setIsSpeaking(false);
   };
 
   return (
     <div className="fixed top-20 left-4 z-50 flex flex-col gap-3 no-print group">
-      {/* Visual Label */}
       <div className="absolute -top-8 left-0 bg-indigo-100 text-indigo-600 text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap font-bold shadow-sm">
         أدوات الطالب
       </div>
 
-      {isSpeaking && (
-        <button
-          onClick={handleStopSpeaking}
-          className="p-3 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-all border-2 border-white animate-pulse"
-          title="إيقاف القراءة"
-        >
+      <button
+        onClick={handleReadPage}
+        disabled={isLoading}
+        className={`p-3 rounded-full shadow-lg transition-all border-2 border-white hover:scale-105 flex items-center justify-center ${
+          isSpeaking 
+          ? 'bg-red-500 text-white animate-pulse' 
+          : 'bg-indigo-600 text-white hover:bg-indigo-700'
+        }`}
+        title={isSpeaking ? "إيقاف القراءة" : "قراءة الصفحة بالكامل"}
+      >
+        {isLoading ? (
+          <Loader2 size={20} className="animate-spin" />
+        ) : isSpeaking ? (
           <VolumeX size={20} />
-        </button>
-      )}
-
-      {!isSpeaking && (
-        <button
-          onClick={handleReadPage}
-          className="p-3 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition-all border-2 border-white hover:scale-105"
-          title="قراءة الصفحة (المعلم الذكي)"
-        >
+        ) : (
           <Volume2 size={20} />
-        </button>
-      )}
+        )}
+      </button>
 
       <button
         onClick={handlePrint}
