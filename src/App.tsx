@@ -6,7 +6,7 @@ import { ChatInterface } from './components/ChatInterface';
 import { SubscriptionModal } from './components/SubscriptionModal';
 import { AdminGenerator } from './components/AdminGenerator';
 import { TutorialModal } from './components/TutorialModal';
-import { GraduationCap, School, Printer, LockKeyhole, Clock, AlertTriangle, HelpCircle } from 'lucide-react';
+import { GraduationCap, School, Printer, LockKeyhole, Clock, AlertTriangle, HelpCircle, BadgePercent, Sparkles } from 'lucide-react';
 import { ensureApiKey } from './utils/apiKeyManager';
 
 const App: React.FC = () => {
@@ -20,7 +20,6 @@ const App: React.FC = () => {
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
 
   useEffect(() => {
-    // محاولة التأكد من وجود مفتاح عند بدء التشغيل
     const initKey = async () => {
       await ensureApiKey();
     };
@@ -40,7 +39,8 @@ const App: React.FC = () => {
         let startStr = localStorage.getItem('trial_start_date');
         if (startStr) {
             const startDate = new Date(startStr);
-            const endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+            // العرض لمدة 48 ساعة فقط
+            const endDate = new Date(startDate.getTime() + 48 * 60 * 60 * 1000); 
             const now = new Date();
             const diff = endDate.getTime() - now.getTime();
 
@@ -50,10 +50,15 @@ const App: React.FC = () => {
                 const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                 const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
                 const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-                setTrialTimeLeft(`${days} يوم : ${hours} ساعة : ${minutes} دقيقة : ${seconds} ثانية`);
+                
+                // تنسيق وقت مختصر جداً
+                const timeString = days > 0 
+                    ? `${days}ي و ${hours}س` 
+                    : `${hours}:${minutes}:${seconds}`;
+                setTrialTimeLeft(timeString);
             } else {
                 setIsTrialActive(false);
-                setTrialTimeLeft("انتهت الفترة التجريبية");
+                setTrialTimeLeft("");
             }
         }
     }, 1000);
@@ -125,11 +130,28 @@ const App: React.FC = () => {
         onClose={() => setIsTutorialOpen(false)}
       />
       
+      {/* شريط الاشتراك المختصر (Compact Banner) */}
       {isTrialActive && !isCurrentGradeSubscribed && trialTimeLeft && (
-          <div className="bg-indigo-600 text-white text-xs md:text-sm py-2 px-4 text-center font-bold flex items-center justify-center gap-2 no-print shadow-md dir-rtl" dir="rtl">
-              <Clock size={16} className="text-yellow-300 animate-pulse" />
-              <span>فترة تجريبية مجانية: متبقي</span>
-              <span className="font-mono bg-indigo-700 px-2 py-0.5 rounded text-yellow-300 tracking-wider">{trialTimeLeft}</span>
+          <div className="sticky top-0 z-[100] w-full no-print">
+            <button 
+              onClick={() => setIsManualSubscriptionOpen(true)}
+              className="w-full bg-slate-900 text-white py-1.5 px-4 flex items-center justify-center gap-4 hover:bg-slate-800 transition-all border-b border-indigo-500/30"
+            >
+              <div className="flex items-center gap-1.5">
+                <BadgePercent size={16} className="text-yellow-400" />
+                <span className="text-xs md:text-sm font-black">🎁 خصم 20% لفترة محدودة! اشترك الآن</span>
+              </div>
+              
+              <div className="h-4 w-px bg-white/20"></div>
+
+              <div className="flex items-center gap-2">
+                <Clock size={14} className="text-indigo-400" />
+                <span className="font-mono text-xs md:text-sm font-bold text-indigo-300">
+                  ينتهي خلال: {trialTimeLeft}
+                </span>
+                <Sparkles size={12} className="text-yellow-400 animate-pulse" />
+              </div>
+            </button>
           </div>
       )}
 
@@ -192,11 +214,9 @@ const App: React.FC = () => {
         </div>
       ) : (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50 flex flex-col items-center justify-center p-4 relative">
-          
           <button 
              onClick={() => setIsTutorialOpen(true)}
              className="absolute top-4 right-4 py-2 px-4 bg-white/80 backdrop-blur-sm text-slate-600 rounded-full shadow-sm hover:bg-white hover:text-indigo-600 transition-all z-20 flex items-center gap-2 font-bold text-sm"
-             title="شاهد فيديو الشرح"
           >
              <HelpCircle size={20} />
              <span>كيف أستخدم التطبيق؟</span>
@@ -205,7 +225,6 @@ const App: React.FC = () => {
           <button 
              onClick={handlePrint}
              className="absolute top-4 left-4 p-3 bg-white/80 backdrop-blur-sm text-slate-600 rounded-full shadow-sm hover:bg-white hover:text-indigo-600 transition-all z-20"
-             title="حفظ الصفحة كـ PDF"
           >
              <Printer size={20} />
           </button>
@@ -286,7 +305,6 @@ const App: React.FC = () => {
               <button 
                 onClick={toggleAdmin}
                 className="opacity-50 hover:opacity-100 transition-opacity p-2 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600"
-                title="لوحة تحكم المسؤول (Admin)"
               >
                 <LockKeyhole size={16} />
               </button>
