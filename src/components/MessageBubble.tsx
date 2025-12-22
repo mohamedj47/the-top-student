@@ -1,10 +1,10 @@
-// ================ بداية الكود الكامل لملف MessageBubble.tsx ================
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Message, Sender, Subject } from '../types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Bot, User, Copy, Check, Volume2, StopCircle } from 'lucide-react';
+import { Bot, User, Copy, Check, Volume2, StopCircle, Loader2 } from 'lucide-react';
+import { generateAiSpeech, streamSpeech, sanitizeForSpeech } from '../services/geminiService';
 
 interface MessageBubbleProps {
   message: Message;
@@ -17,104 +17,82 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
   const isUser = message.sender === Sender.USER;
   const [isCopied, setIsCopied] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  
-  // سنستخدم هذا المتغير للاحتفاظ بمرجع للكائن الصوتي للتحكم فيه (مثل الإيقاف)
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // دالة لتنظيف الموارد والتأكد من توقف أي صوت عند مغادرة الصفحة
   useEffect(() => {
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
       }
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, []);
 
-  // دالة بناء النص التعليمي (احتفظنا بها كما هي لأنها ممتازة!)
-  const buildEducationalSpeechText = (rawText: string): string => {
-    let base = rawText
-      .replace(/```[\s\S]*?```/g, ' ')
-      .replace(/`.*?`/g, ' ')
-      .replace(/\[.*?\]\(.*?\)/g, ' ')
-      .replace(/[\[\]{}()]/g, ' ')
-      .replace(/[*#~_]/g, '')
-      .replace(/[—-]/g, ' ، ');
-    const lines = base.split('\n');
-    let listCounter = 0;
-    const transformedLines: string[] = [];
-    lines.forEach(line => {
-      let l = line.trim();
-      if (!l) return;
-      if (l.startsWith('#') || (l.length < 50 && l.endsWith(':'))) {
-        transformedLines.push(`خلّينا نركز في الجزء ده ، ${l.replace(/[#:]/g, '')}`);
-        listCounter = 0;
-        return;
-      }
-      if (/^(\d+[-.)]|\*|-)/.test(l)) {
-        const content = l.replace(/^(\d+[-.)]|\*|-)/, '').trim();
-        listCounter++;
-        const prefix = listCounter === 1 ? 'أول نقطة هي ' : 'النقطة اللي بعدها هي ';
-        transformedLines.push(`${prefix} ${content}`);
-        return;
-      } else {
-        listCounter = 0;
-      }
-      if (l.includes('مثال')) {
-        transformedLines.push(`خلّينا نشوف مثال بسيط ، ${l}`);
-        return;
-      }
-      transformedLines.push(l);
-    });
-    return transformedLines.join(' . ');
-  };
-
-  const speak = useCallback(async () => {
-    if (isSpeaking && audioRef.current) {
-      audioRef.current.pause();
+  const handleSpeech = async () => {
+    if (isSpeaking) {
+      if (audioRef.current) audioRef.current.pause();
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
       setIsSpeaking(false);
       return;
     }
-    
-    const textToSpeak = buildEducationalSpeechText(message.text);
-    if (!textToSpeak) return;
 
-    setIsSpeaking(true);
+    setIsAudioLoading(true);
 
     try {
-      // ******** هذا هو السطر الوحيد الذي تم تغييره ********
-      const response = await fetch('https://audio-server-vrbp.onrender.com/api/generate-speech', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: textToSpeak }),
-      });
-
-      if (!response.ok) {
-        throw new Error('فشل الخادم في إنشاء الصوت.');
-      }
-
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-      audio.play();
-
-      audio.onended = () => {
-        setIsSpeaking(false);
-        URL.revokeObjectURL(audioUrl);
-      };
+      // 1. المحاولة الأولى: استخدام Gemini TTS (صوت Kore الاحترافي)
+      const base64Audio = await generateAiSpeech(message.text);
       
-      audio.onerror = () => {
-        setIsSpeaking(false);
-        console.error("حدث خطأ أثناء تشغيل الملف الصوتي.");
-      };
+      if (base64Audio) {
+        const audioSrc = `data:audio/pcm;base64,${base64Audio}`;
+        
+        // فك تشفير الـ PCM الخام (Gemini يعيد PCM 16-bit 24kHz)
+        const binaryString = atob(base64Audio);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        const int16Data = new Int16Array(bytes.buffer);
+        const float32Data = new Float32Array(int16Data.length);
+        for (let i = 0; i < int16Data.length; i++) {
+          float32Data[i] = int16Data[i] / 32768.0;
+        }
+        
+        const buffer = audioContext.createBuffer(1, float32Data.length, 24000);
+        buffer.getChannelData(0).set(float32Data);
+        
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        
+        setIsAudioLoading(false);
+        setIsSpeaking(true);
+        
+        source.onended = () => setIsSpeaking(false);
+        source.start();
+        
+        // حفظ المرجع للإيقاف
+        (window as any).currentAudioSource = source;
+      } else {
+        // 2. المحاولة الثانية (الاحتياطية): استخدام المحرك الصوتي للجهاز
+        setIsAudioLoading(false);
+        setIsSpeaking(true);
+        await streamSpeech(message.text, () => setIsSpeaking(false));
+      }
     } catch (error) {
-      console.error("خطأ في التواصل مع خادم الصوت:", error);
-      // تم تحسين رسالة الخطأ للمستخدم
-      alert("حدث خطأ أثناء محاولة تشغيل الصوت. يرجى المحاولة مرة أخرى.");
-      setIsSpeaking(false);
+      console.error("Speech Error:", error);
+      setIsAudioLoading(false);
+      // محاولة أخيرة بالمحرك المحلي
+      setIsSpeaking(true);
+      await streamSpeech(message.text, () => setIsSpeaking(false));
     }
-  }, [isSpeaking, message.text]);
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.text);
@@ -122,7 +100,38 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
     setTimeout(() => setIsCopied(false), 2000);
   };
 
-  // ----- لا يوجد أي تغيير في الجزء المرئي (return) -----
+  const InteractiveText = ({ children }: { children: React.ReactNode }) => {
+    if (isUser || !onQuote) return <>{children}</>;
+
+    const processNode = (node: React.ReactNode): React.ReactNode => {
+      if (typeof node === 'string') {
+        const sentences = node.split(/(?<=[.؟!])\s+/);
+        return sentences.map((s, i) => (
+          <span 
+            key={i} 
+            onClick={(e) => {
+              e.stopPropagation();
+              onQuote(s.trim());
+            }}
+            className="cursor-help hover:bg-indigo-100/60 hover:text-indigo-900 rounded px-1 transition-all inline-block decoration-dotted decoration-indigo-300 underline-offset-4"
+            title="اضغط أو المس للاستفسار عن هذه الجملة"
+          >
+            {s}{i < sentences.length - 1 ? ' ' : ''}
+          </span>
+        ));
+      }
+      if (React.isValidElement(node)) {
+        const element = node as React.ReactElement<any>;
+        return React.cloneElement(element, {
+          children: React.Children.map(element.props.children, processNode)
+        } as any);
+      }
+      return node;
+    };
+
+    return <>{React.Children.map(children, processNode)}</>;
+  };
+
   return (
     <div className={`flex w-full mb-4 pop-in ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div className={`flex w-full ${isUser ? 'flex-row-reverse' : 'flex-row'} gap-3`}>
@@ -134,23 +143,35 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
             {!isUser && (
               <div className="flex justify-end gap-2 mb-2 border-b border-slate-100 pb-2 no-print">
                 <button 
-                  onClick={speak} 
+                  onClick={handleSpeech} 
+                  disabled={isAudioLoading}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${isSpeaking ? 'bg-indigo-100 text-indigo-700 animate-pulse border-indigo-200 border' : 'bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 border border-slate-200'}`}
                 >
-                  {isSpeaking ? <StopCircle size={14} /> : <Volume2 size={14} />}
-                  <span>{isSpeaking ? 'إيقاف الشرح' : 'استمع للشرح'}</span>
+                  {isAudioLoading ? <Loader2 size={14} className="animate-spin" /> : (isSpeaking ? <StopCircle size={14} /> : <Volume2 size={14} />)}
+                  <span>{isAudioLoading ? 'جاري التحضير...' : (isSpeaking ? 'إيقاف' : 'استمع بصوت Kore')}</span>
                 </button>
                 <button onClick={handleCopy} className="p-1 hover:text-indigo-600 transition-colors" title="نسخ">
                   {isCopied ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />}
                 </button>
               </div>
             )}
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
+            <ReactMarkdown 
+              remarkPlugins={[remarkGfm]}
+              components={{
+                p: ({ children }) => <p className="mb-4"><InteractiveText>{children}</InteractiveText></p>,
+                li: ({ children }) => <li className="mb-2"><InteractiveText>{children}</InteractiveText></li>,
+                h1: ({ children }) => <h1 className="text-2xl font-black mb-4"><InteractiveText>{children}</InteractiveText></h1>,
+                h2: ({ children }) => <h2 className="text-xl font-bold mb-3"><InteractiveText>{children}</InteractiveText></h2>,
+                h3: ({ children }) => <h3 className="text-lg font-bold mb-2"><InteractiveText>{children}</InteractiveText></h3>,
+                td: ({ children }) => <td className="p-2 border border-slate-200"><InteractiveText>{children}</InteractiveText></td>,
+                blockquote: ({ children }) => <blockquote className="border-r-4 border-indigo-500 pr-4 italic my-4"><InteractiveText>{children}</InteractiveText></blockquote>,
+              }}
+            >
+              {message.text}
+            </ReactMarkdown>
           </div>
         </div>
       </div>
     </div>
-  ); 
+  );
 };
-
-// ================ نهاية الكود الكامل لملف MessageBubble.tsx ================
