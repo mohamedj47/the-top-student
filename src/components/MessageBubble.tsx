@@ -150,7 +150,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
         </div>
       </div>
     </div>
-  );
+  ); 
 };
 
 // ================ نهاية الكود الكامل لملف MessageBubble.tsx ================
