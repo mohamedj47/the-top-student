@@ -16,27 +16,31 @@ const SYSTEM_INSTRUCTION = `
 let requestQueue: Promise<any> = Promise.resolve();
 
 /**
- * دالة ذكية للبحث في المستودع المحلي المجدول (تقليل الـ API بنسبة 99%)
+ * دالة ذكية للبحث في المستودع المحلي (Offline-First)
  */
 const findLocalContent = (query: string, subject: Subject): string | null => {
-  const normalizedQuery = query.toLowerCase();
+  const normalizedQuery = query.toLowerCase().trim();
   
-  // استخراج اسم الدرس من الطلب
+  // كلمات دلالية للتجاهل لتحسين البحث
+  const stopWords = ["اشرح", "لخص", "أريد", "عن", "موضوع", "درس", "ممكن", "أهم", "نقاط", "أسئلة", "توقعات"];
+  let cleanQuery = normalizedQuery;
+  stopWords.forEach(word => {
+    cleanQuery = cleanQuery.replace(new RegExp(`^${word}\\s+|\\s+${word}\\s+|\\s+${word}$`, 'g'), ' ').trim();
+  });
+
   const entry = localContentRepository.find(e => 
     normalizedQuery.includes(e.topic.toLowerCase()) || 
-    e.topic.toLowerCase().includes(normalizedQuery.replace(/(اشرح|لخص|أسئلة|توقعات|درس|موضوع|أعداد|مركبة|عن|ممكن)/g, '').trim())
+    e.topic.toLowerCase().includes(cleanQuery) ||
+    (cleanQuery.length > 3 && e.topic.toLowerCase().includes(cleanQuery))
   );
 
   if (!entry) return null;
 
-  if (normalizedQuery.includes('لخص') || normalizedQuery.includes('ملخص')) {
-    return entry.summary;
+  if (normalizedQuery.includes('لخص') || normalizedQuery.includes('ملخص') || normalizedQuery.includes('نقاط')) {
+    return entry.summary + "\n\n" + entry.keyPoints;
   }
   if (normalizedQuery.includes('أسئلة') || normalizedQuery.includes('تدريب')) {
     return entry.practice;
-  }
-  if (normalizedQuery.includes('نقاط') || normalizedQuery.includes('توقعات')) {
-    return entry.keyPoints;
   }
   
   return entry.explanation;
@@ -51,18 +55,32 @@ const cleanMathNotation = (text: string): string => {
   return text.replace(/\$/g, '');
 };
 
-const executeWithRetry = async <T>(fn: () => Promise<T>, retries = 3, delay = 1500): Promise<T> => {
-  try { return await fn(); } catch (error: any) {
-    if (retries > 0) {
-      // إذا كان الخطأ متعلق بالـ Quota (429)، نقوم بتدوير المفتاح فوراً
-      if (error?.status === 429 || error?.message?.includes('429')) {
+/**
+ * تنفيذ الطلب مع محاولة استخدام كل المفاتيح المتاحة بالتتابع
+ */
+const executeWithFullKeyRotation = async <T>(fn: (apiKey: string) => Promise<T>): Promise<T> => {
+  const totalKeys = getAvailableKeysCount();
+  let lastError: any = null;
+
+  for (let i = 0; i < totalKeys; i++) {
+    try {
+      const currentKey = getApiKey();
+      return await fn(currentKey);
+    } catch (error: any) {
+      lastError = error;
+      // إذا كان الخطأ متعلق بالحصة (429) أو مشكلة في المفتاح، ننتقل للمفتاح التالي فوراً
+      if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('API_KEY_INVALID')) {
+        console.warn(`Key ${i+1} exhausted or invalid, rotating...`);
         rotateApiKey();
+        // انتظار بسيط قبل المحاولة بالمفتاح التالي
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } else {
+        // إذا كان خطأ آخر غير متعلق بالمفتاح، نتوقف
+        throw error;
       }
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return executeWithRetry(fn, retries - 1, delay * 1.5);
     }
-    throw error;
   }
+  throw lastError || new Error("All keys exhausted");
 };
 
 export const searchInStaticBank = (query: string) => {
@@ -84,7 +102,7 @@ export const generateStreamResponse = async (
   deviceId?: string
 ): Promise<string> => {
   
-  // 1. الأولوية للمحتوى المحلي (سريع ومجاني)
+  // 1. محاولة البحث المحلي أولاً (لتوفير الـ API لأوقات الزحام)
   const localContent = findLocalContent(userMessage, subject);
   if (localContent) {
     onChunk(localContent);
@@ -105,10 +123,10 @@ export const generateStreamResponse = async (
     return cleanAnswer;
   }
 
-  // 2. الـ API للحالات الفريدة فقط
-  const task = () => executeWithRetry(async () => {
+  // 2. استخدام الـ API مع نظام التدوير الشامل
+  const task = () => executeWithFullKeyRotation(async (apiKey) => {
     await ensureApiKey();
-    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const ai = new GoogleGenAI({ apiKey });
     const modelName = options?.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
     
     const contents = history.slice(-6).map(msg => ({
@@ -143,14 +161,15 @@ export const generateStreamResponse = async (
     }
     return finalCleanText;
   }).catch(error => {
-    // في حالة فشل كل المحاولات والـ API Keys
-    const isPeakHour = new Date().getHours() >= 18 && new Date().getHours() <= 23;
-    let fallbackMsg = "";
+    // إظهار رسالة ذكية في حالة فشل كل المفاتيح الـ 5
+    const hour = new Date().getHours();
+    const isPeakTime = hour >= 17 || hour <= 1; // من 5 مساءاً لـ 1 صباحاً وقت ذروة
     
-    if (isPeakHour) {
-      fallbackMsg = "⚠️ **نعتذر منك يا بطل.. النظام مشغول حالياً بسبب ضغط المذاكرة في أوقات الذروة.**\n\nبما أننا نستخدم النسخة المجانية، فقد وصلنا للحد الأقصى من الأسئلة لهذا الموعد.\n\n💡 **ماذا يمكنك أن تفعل الآن؟**\n1. تصفح **فهرس الدروس** من القائمة بالأعلى (يعمل دائماً).\n2. جرب سؤالاً آخر من الأسئلة المقترحة.\n3. حاول مرة أخرى بعد قليل.";
+    let fallbackMsg = "";
+    if (isPeakTime) {
+      fallbackMsg = "⚠️ **يا بطل، الخوادم المجانية وصلت لحد الاستخدام الأقصى الآن (وقت الذروة).**\n\nبما أننا نخدم آلاف الطلاب حالياً، نعتذر عن هذا التوقف المؤقت.\n\n💡 **حلول سريعة لك الآن:**\n1. اضغط على **فهرس الدروس** بالأسفل لمشاهدة شرح فيديو أو قراءة ملخص جاهز.\n2. جرب اختيار مادة أخرى أو حاول مجدداً بعد 15 دقيقة.\n3. تأكد أنك كتبت اسم الدرس بشكل صحيح لنعرض لك الشرح المخزن مسبقاً.";
     } else {
-      fallbackMsg = "عذراً، يبدو أن هناك مشكلة مؤقتة في الاتصال بخوادم الذكاء الاصطناعي. جرب كتابة سؤالك بوضوح أو اختر درساً من الفهرس لنعرض لك شرحه الجاهز.";
+      fallbackMsg = "عذراً، يبدو أن هناك ضغطاً كبيراً على النظام حالياً. يمكنك استخدام **فهرس الدروس** للوصول للمحتوى الجاهز فوراً دون الحاجة للانتظار.";
     }
     
     onChunk(fallbackMsg);
@@ -163,8 +182,8 @@ export const generateStreamResponse = async (
 
 export const generateAiSpeech = async (text: string): Promise<string | null> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: getApiKey() });
-    return await executeWithRetry(async () => {
+    return await executeWithFullKeyRotation(async (apiKey) => {
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text: sanitizeForSpeech(text) }] }],
