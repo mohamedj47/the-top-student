@@ -14,14 +14,15 @@
         background-color: #f8fafc;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
+        margin: 0;
       }
       .font-sans { font-family: 'Cairo', sans-serif; }
       
-      /* Scrollbar */
+      /* Scrollbar Customization */
       .scrollbar-hide::-webkit-scrollbar { display: none; }
       .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       
-      /* Markdown Styles */
+      /* Markdown Styles for AI Responses */
       .markdown-body ul { list-style-type: disc; padding-right: 1.5rem; margin-bottom: 1.25rem; }
       .markdown-body ol { list-style-type: decimal; padding-right: 1.5rem; margin-bottom: 1.25rem; }
       .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 800; margin-top: 1.5rem; margin-bottom: 0.75rem; color: #1e293b; }
@@ -29,7 +30,7 @@
       .markdown-body li { margin-bottom: 0.5rem; line-height: 2; font-size: 1.05em; }
       .markdown-body strong { color: #4338ca; font-weight: 800; }
       
-      /* Table Styles - Fixed for Clarity */
+      /* Table Styles for Educational Content */
       .markdown-body table { 
         border-collapse: collapse; 
         width: 100%; 
@@ -54,7 +55,7 @@
       }
       .markdown-body tr:nth-child(even) { background-color: #f8fafc; }
 
-      /* Animations */
+      /* Visual Polish and Animations */
       .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
       .typing-dot:nth-child(1) { animation-delay: -0.32s; }
       .typing-dot:nth-child(2) { animation-delay: -0.16s; }
@@ -63,14 +64,13 @@
       @keyframes popIn { 0% { opacity: 0; transform: scale(0.95) translateY(10px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
       .pop-in { animation: popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
-      /* Print Styles */
+      /* Print Optimizations */
       @media print {
         @page { margin: 1.5cm; size: A4; }
         html, body, #root { height: auto !important; min-height: 0 !important; overflow: visible !important; display: block !important; }
         .no-print, header button, .input-area, .floating-tools, button { display: none !important; }
         .chat-container { display: block !important; height: auto !important; overflow: visible !important; width: 100% !important; position: static !important; }
         .markdown-body { color: black !important; background: white !important; border: 1px solid #eee !important; page-break-inside: avoid !important; margin-bottom: 1cm !important; width: 100% !important; }
-        .user-message-bubble { border: none !important; background: #f0f0f0 !important; color: #333 !important; }
       }
     </style>
     <script type="importmap">
