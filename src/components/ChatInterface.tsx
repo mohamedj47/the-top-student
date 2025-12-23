@@ -20,7 +20,7 @@ const SUGGESTIONS = [
   { 
     label: 'اختر درساً للشرح', 
     icon: <List size={18} />, 
-    promptPrefix: 'LESSON_BROWSER_TRIGGER', // Special Trigger
+    promptPrefix: 'LESSON_BROWSER_TRIGGER', 
     autoSend: false 
   },
   { 
@@ -82,11 +82,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
   const [isRecording, setIsRecording] = useState(false);
   const [isLiveMode, setIsLiveMode] = useState(false);
   
-  // Advanced Features Toggles
   const [isThinkingMode, setIsThinkingMode] = useState(false);
   const [isSearchMode, setIsSearchMode] = useState(false);
 
-  // Video & Lesson Browser State
   const [isLessonBrowserOpen, setIsLessonBrowserOpen] = useState(false);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const [currentVideoData, setCurrentVideoData] = useState<VideoResult | null>(null);
@@ -105,8 +103,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
   useEffect(() => {
     scrollToBottom();
   }, [messages, attachment]);
-
-  // --- Handlers for Files & Camera ---
 
   const processFile = (file: File) => {
     const reader = new FileReader();
@@ -130,19 +126,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
     if (e.target.files && e.target.files[0]) {
         processFile(e.target.files[0]);
     }
-    // FIX: Reset input value so onChange works if user selects the same file again
     e.target.value = '';
   };
 
-  // --- Handlers for Audio Recording ---
-
   const handleRecordToggle = async () => {
     if (isRecording) {
-        // Stop Recording
         mediaRecorderRef.current?.stop();
         setIsRecording(false);
     } else {
-        // Start Recording
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const mediaRecorder = new MediaRecorder(stream);
@@ -154,7 +145,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
             };
 
             mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' }); // Gemini handles common types
+                const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
                 const reader = new FileReader();
                 reader.readAsDataURL(audioBlob);
                 reader.onloadend = () => {
@@ -165,8 +156,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
                          data: base64String,
                          name: 'تسجيل صوتي'
                      });
-                     
-                     // Stop all tracks
                      stream.getTracks().forEach(track => track.stop());
                 };
             };
@@ -180,12 +169,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
     }
   };
 
-  // --- Main Send Handler ---
-
   const handleSend = async (text: string = inputValue) => {
     if ((!text.trim() && !attachment) || isLoading) return;
 
-    // Default text if only attachment sent
     let finalText = text;
     if (!finalText.trim() && attachment) {
         if (attachment.type === 'image') finalText = "اشرح هذه الصورة";
@@ -203,7 +189,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
 
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
-    setAttachment(null); // Clear attachment after sending
+    setAttachment(null);
     setIsLoading(true);
 
     try {
@@ -262,14 +248,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
     }
   };
 
-  const handleTermClick = (term: string) => {
-    setInputValue(term);
-    inputRef.current?.focus();
-  };
-
-  // New handler for clicking paragraphs in bot message
   const handleQuoteClick = (text: string) => {
-      // Clean up text slightly to avoid huge blocks
       const cleanText = text.substring(0, 150) + (text.length > 150 ? "..." : "");
       setInputValue(`اشرح لي بالتفصيل: "${cleanText}"`);
       inputRef.current?.focus();
@@ -279,11 +258,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
     window.print();
   };
 
-  // Toggle helpers
   const toggleThinking = () => {
       if (!isThinkingMode) {
           setIsThinkingMode(true);
-          setIsSearchMode(false); // Mutually exclusive typically better
+          setIsSearchMode(false);
       } else {
           setIsThinkingMode(false);
       }
@@ -298,24 +276,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
       }
   };
   
-  // Video Handlers
   const handlePlayVideo = (lesson: string, data: VideoResult) => {
       setCurrentLessonTitle(lesson);
       setCurrentVideoData(data);
       setIsVideoModalOpen(true);
   };
   
-  // Explain Handler
   const handleExplainLesson = (lesson: string) => {
       setIsLessonBrowserOpen(false);
-      // Construct a good prompt for explanation
       handleSend(`اشرح لي درس "${lesson}" بالتفصيل وبالأمثلة.`);
   };
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 chat-container">
       
-      {/* Modals */}
       <LiveVoiceModal 
         isOpen={isLiveMode}
         onClose={() => setIsLiveMode(false)}
@@ -339,7 +313,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
         lessonTitle={currentLessonTitle}
       />
 
-      {/* Hidden Inputs */}
       <input 
         type="file" 
         ref={fileInputRef} 
@@ -353,10 +326,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
         onChange={handleFileSelect} 
         className="hidden" 
         accept="image/*" 
-        capture="environment" // Forces Camera on Mobile
+        capture="environment"
       />
 
-      {/* Header */}
       <header className="bg-white border-b border-slate-200 px-3 py-3 md:px-6 md:py-4 flex justify-between items-center shadow-sm shrink-0 z-10 gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <button 
@@ -372,12 +344,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
         </div>
         
         <div className="flex items-center gap-1 md:gap-2 shrink-0">
-            {/* NEW SUBSCRIBE BUTTON */}
             {onSubscribe && (
                 <button
                     onClick={onSubscribe}
                     className="bg-amber-400 hover:bg-amber-500 text-amber-900 px-3 py-1.5 md:px-4 md:py-2 rounded-full font-bold text-xs md:text-sm flex items-center gap-1 transition-all shadow-[0_0_15px_rgba(251,191,36,0.6)] animate-pulse"
-                    title="اشترك الآن للحصول على كافة المميزات"
                 >
                     <BadgePercent size={16} className="md:w-5 md:h-5" />
                     <span className="hidden sm:inline">اشترك الآن</span>
@@ -385,11 +355,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
                 </button>
             )}
 
-            {/* NEW VIDEO LIBRARY BUTTON */}
             <button 
                onClick={() => setIsLessonBrowserOpen(true)}
                className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-full transition-all hover:scale-110 active:scale-95"
-               title="مكتبة الفيديوهات والدروس"
             >
                <List size={22} className="md:w-6 md:h-6" />
             </button>
@@ -397,7 +365,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
             <button 
                onClick={handlePrint}
                className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all hover:scale-110 active:scale-95"
-               title="طباعة / حفظ PDF"
             >
                <Printer size={20} className="md:w-6 md:h-6" />
             </button>
@@ -408,11 +375,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
         </div>
       </header>
 
-      {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-3 md:p-6 space-y-4 md:space-y-6 scrollbar-hide">
         {messages.map((msg) => (
           <div key={msg.id}>
-             {/* Show Attachment in Chat if User Sent it */}
              {msg.sender === Sender.USER && msg.attachment && (
                  <div className="flex justify-end mb-2 pop-in">
                      <div className="bg-indigo-600 p-2 rounded-2xl rounded-br-none max-w-[200px] border-4 border-indigo-500">
@@ -433,8 +398,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
              <MessageBubble 
                 message={msg} 
                 subject={subject} 
-                onTermClick={handleTermClick}
                 onQuote={handleQuoteClick}
+                onRetry={() => handleSend(msg.text)}
+                onOpenLessons={() => setIsLessonBrowserOpen(true)}
              />
           </div>
         ))}
@@ -444,13 +410,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
             <div className="bg-white border border-slate-200 px-5 py-4 rounded-3xl rounded-tr-none shadow-sm flex items-center gap-3">
                <Bot size={20} className={`text-indigo-600 ${isThinkingMode ? 'animate-bounce' : 'animate-pulse'}`} />
                <div className="flex flex-col">
-                  {isThinkingMode && <span className="text-xs text-indigo-500 font-bold mb-1">جاري التفكير بعمق...</span>}
-                  {isSearchMode && <span className="text-xs text-emerald-500 font-bold mb-1">جاري البحث في المصادر...</span>}
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-1.5 mb-1">
                     <span className="w-2 h-2 bg-indigo-400 rounded-full typing-dot"></span>
                     <span className="w-2 h-2 bg-indigo-400 rounded-full typing-dot"></span>
                     <span className="w-2 h-2 bg-indigo-400 rounded-full typing-dot"></span>
                   </div>
+                  <span className="text-xs text-indigo-500 font-bold">لحظات، أقوم بتحضير إجابتك...</span>
                </div>
             </div>
           </div>
@@ -458,14 +423,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Suggestions (Shortcuts) - Hide when previewing */}
       {!isLoading && !attachment && (
-        <div className="px-3 md:px-4 py-2 flex gap-2 overflow-x-auto scrollbar-hide shrink-0 no-print pop-in pb-3">
+        <div className="px-3 md:px-4 py-2 flex flex-wrap gap-2 justify-center shrink-0 no-print pop-in pb-3">
           {SUGGESTIONS.map((suggestion, index) => (
             <button
               key={index}
               onClick={() => handleSuggestionClick(suggestion)}
-              className="flex items-center gap-2 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 px-4 py-3 rounded-2xl text-sm md:text-base font-bold text-slate-700 transition-all whitespace-nowrap shadow-sm hover:scale-105 active:scale-95"
+              className="flex items-center gap-2 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 px-4 py-2 rounded-2xl text-xs md:text-base font-bold text-slate-700 transition-all whitespace-nowrap shadow-sm hover:scale-105 active:scale-95"
             >
               <span className="text-indigo-500">{suggestion.icon}</span>
               {suggestion.label}
@@ -474,7 +438,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
         </div>
       )}
 
-      {/* Attachment Preview Area */}
       {attachment && (
         <div className="px-5 py-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between pop-in">
             <div className="flex items-center gap-4">
@@ -499,21 +462,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
         </div>
       )}
 
-      {/* Input Area */}
       <div className="p-3 md:p-4 bg-white border-t border-slate-200 shrink-0 input-area">
         <div className="max-w-4xl mx-auto relative flex items-end gap-2">
           
-          {/* Media Buttons (Left) */}
           <div className="flex items-center gap-1.5 pb-2">
              <button 
                onClick={() => setIsLiveMode(true)}
                className="p-2.5 md:p-3 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all shadow-sm ring-1 ring-indigo-100 hover:scale-110 active:scale-95 hidden sm:flex"
-               title="محادثة صوتية مباشرة (Live)"
              >
                 <AudioLines size={22} />
              </button>
              
-             {/* Thinking Mode Toggle */}
              <button 
                onClick={toggleThinking}
                className={`p-2.5 md:p-3 rounded-full transition-all hover:scale-110 active:scale-95 border ${
@@ -521,12 +480,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
                    ? 'bg-amber-100 text-amber-700 border-amber-300 ring-2 ring-amber-100' 
                    : 'bg-slate-100 text-slate-500 border-transparent hover:bg-indigo-100 hover:text-indigo-600'
                }`}
-               title="تفكير عميق (للأسئلة الصعبة)"
              >
                 <BrainCircuit size={22} />
              </button>
 
-             {/* Search Mode Toggle */}
              <button 
                onClick={toggleSearch}
                className={`p-2.5 md:p-3 rounded-full transition-all hover:scale-110 active:scale-95 border ${
@@ -534,7 +491,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
                    ? 'bg-emerald-100 text-emerald-700 border-emerald-300 ring-2 ring-emerald-100' 
                    : 'bg-slate-100 text-slate-500 border-transparent hover:bg-indigo-100 hover:text-indigo-600'
                }`}
-               title="بحث في الانترنت"
              >
                 <Globe size={22} />
              </button>
@@ -542,20 +498,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
              <button 
                onClick={() => cameraInputRef.current?.click()}
                className="p-2.5 md:p-3 rounded-full bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-600 transition-all hover:scale-110 active:scale-95 hidden sm:flex"
-               title="تصوير من الكتاب"
              >
                 <Camera size={22} />
              </button>
              <button 
                onClick={() => fileInputRef.current?.click()}
                className="p-2.5 md:p-3 rounded-full bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-600 transition-all hover:scale-110 active:scale-95"
-               title="إرفاق صورة أو ملف"
              >
                 <Paperclip size={22} />
              </button>
           </div>
 
-          {/* Text Input */}
           <textarea
             ref={inputRef}
             value={inputValue}
@@ -580,7 +533,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
             disabled={isRecording}
           />
 
-          {/* Mic Button (Moved Next to Send on Mobile) */}
           <button 
                onClick={handleRecordToggle}
                className={`p-2.5 rounded-2xl transition-all h-[56px] md:h-[64px] w-[56px] md:w-[64px] flex items-center justify-center shrink-0 ${
@@ -588,12 +540,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
                    ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-200' 
                    : 'bg-slate-100 text-slate-500 hover:bg-red-100 hover:text-red-500'
                }`}
-               title="تسجيل صوتي"
              >
                 {isRecording ? <StopCircleIcon /> : <Mic size={24} />}
           </button>
 
-          {/* Send Button */}
           <button
             onClick={() => handleSend()}
             disabled={(!inputValue.trim() && !attachment) || isLoading || isRecording}
@@ -617,7 +567,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
   );
 };
 
-// Helper component for Stop Icon
 const StopCircleIcon = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="6" y="6" width="12" height="12" rx="2" ry="2"></rect>
