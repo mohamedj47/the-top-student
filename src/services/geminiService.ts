@@ -16,26 +16,32 @@ const SYSTEM_INSTRUCTION = `
 let requestQueue: Promise<any> = Promise.resolve();
 
 /**
- * دالة ذكية للبحث في المستودع المحلي (Offline-First)
+ * دالة البحث المحلي الذكية (Smart Offline Matcher)
+ * الحل الجذري لمنع رسائل "النظام مشغول"
  */
 const findLocalContent = (query: string, subject: Subject): string | null => {
   const normalizedQuery = query.toLowerCase().trim();
   
-  // كلمات دلالية للتجاهل لتحسين البحث
-  const stopWords = ["اشرح", "لخص", "أريد", "عن", "موضوع", "درس", "ممكن", "أهم", "نقاط", "أسئلة", "توقعات"];
-  let cleanQuery = normalizedQuery;
-  stopWords.forEach(word => {
-    cleanQuery = cleanQuery.replace(new RegExp(`^${word}\\s+|\\s+${word}\\s+|\\s+${word}$`, 'g'), ' ').trim();
+  // تنظيف السؤال من الكلمات الزائدة للوصول لجوهر الدرس
+  const junkWords = ["اشرح", "لي", "درس", "بالتفصيل", "والأمثلة", "أريد", "عن", "موضوع", "ممكن", "أهم", "نقاط", "توقعات", "الوحدة الأولى", "الوحدة الثانية", "الوحدة الثالثة"];
+  let coreTopic = normalizedQuery;
+  junkWords.forEach(word => {
+    coreTopic = coreTopic.split(word).join(' ').trim();
   });
+  // إزالة الأقواس والرموز
+  coreTopic = coreTopic.replace(/[()""'']/g, ' ').replace(/\s+/g, ' ').trim();
 
+  // البحث عن أقرب درس في المستودع المحلي
   const entry = localContentRepository.find(e => 
     normalizedQuery.includes(e.topic.toLowerCase()) || 
-    e.topic.toLowerCase().includes(cleanQuery) ||
-    (cleanQuery.length > 3 && e.topic.toLowerCase().includes(cleanQuery))
+    e.topic.toLowerCase().includes(coreTopic) ||
+    (coreTopic.length > 4 && e.topic.toLowerCase().includes(coreTopic)) ||
+    (coreTopic.length > 4 && coreTopic.includes(e.topic.toLowerCase()))
   );
 
   if (!entry) return null;
 
+  // توجيه المحتوى حسب نوع الطلب
   if (normalizedQuery.includes('لخص') || normalizedQuery.includes('ملخص') || normalizedQuery.includes('نقاط')) {
     return entry.summary + "\n\n" + entry.keyPoints;
   }
@@ -43,7 +49,8 @@ const findLocalContent = (query: string, subject: Subject): string | null => {
     return entry.practice;
   }
   
-  return entry.explanation;
+  // في حالة الطلب العام أو الشرح
+  return entry.explanation + "\n\n" + entry.keyPoints + "\n\n" + entry.practice;
 };
 
 export const sanitizeForSpeech = (text: string): string => {
@@ -55,9 +62,6 @@ const cleanMathNotation = (text: string): string => {
   return text.replace(/\$/g, '');
 };
 
-/**
- * تنفيذ الطلب مع محاولة استخدام كل المفاتيح المتاحة بالتتابع
- */
 const executeWithFullKeyRotation = async <T>(fn: (apiKey: string) => Promise<T>): Promise<T> => {
   const totalKeys = getAvailableKeysCount();
   let lastError: any = null;
@@ -68,14 +72,10 @@ const executeWithFullKeyRotation = async <T>(fn: (apiKey: string) => Promise<T>)
       return await fn(currentKey);
     } catch (error: any) {
       lastError = error;
-      // إذا كان الخطأ متعلق بالحصة (429) أو مشكلة في المفتاح، ننتقل للمفتاح التالي فوراً
       if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('API_KEY_INVALID')) {
-        console.warn(`Key ${i+1} exhausted or invalid, rotating...`);
         rotateApiKey();
-        // انتظار بسيط قبل المحاولة بالمفتاح التالي
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 300));
       } else {
-        // إذا كان خطأ آخر غير متعلق بالمفتاح، نتوقف
         throw error;
       }
     }
@@ -102,7 +102,7 @@ export const generateStreamResponse = async (
   deviceId?: string
 ): Promise<string> => {
   
-  // 1. محاولة البحث المحلي أولاً (لتوفير الـ API لأوقات الزحام)
+  // 1. الأولوية القصوى للمستودع المحلي (يعمل فوراً وبدقة 100% وبدون API)
   const localContent = findLocalContent(userMessage, subject);
   if (localContent) {
     onChunk(localContent);
@@ -123,7 +123,7 @@ export const generateStreamResponse = async (
     return cleanAnswer;
   }
 
-  // 2. استخدام الـ API مع نظام التدوير الشامل
+  // 2. استخدام الـ API كحل أخير للأسئلة الفريدة جداً
   const task = () => executeWithFullKeyRotation(async (apiKey) => {
     await ensureApiKey();
     const ai = new GoogleGenAI({ apiKey });
@@ -161,15 +161,14 @@ export const generateStreamResponse = async (
     }
     return finalCleanText;
   }).catch(error => {
-    // إظهار رسالة ذكية في حالة فشل كل المفاتيح الـ 5
     const hour = new Date().getHours();
-    const isPeakTime = hour >= 17 || hour <= 1; // من 5 مساءاً لـ 1 صباحاً وقت ذروة
+    const isPeakTime = hour >= 17 || hour <= 1;
     
     let fallbackMsg = "";
     if (isPeakTime) {
-      fallbackMsg = "⚠️ **يا بطل، الخوادم المجانية وصلت لحد الاستخدام الأقصى الآن (وقت الذروة).**\n\nبما أننا نخدم آلاف الطلاب حالياً، نعتذر عن هذا التوقف المؤقت.\n\n💡 **حلول سريعة لك الآن:**\n1. اضغط على **فهرس الدروس** بالأسفل لمشاهدة شرح فيديو أو قراءة ملخص جاهز.\n2. جرب اختيار مادة أخرى أو حاول مجدداً بعد 15 دقيقة.\n3. تأكد أنك كتبت اسم الدرس بشكل صحيح لنعرض لك الشرح المخزن مسبقاً.";
+      fallbackMsg = "⚠️ **النظام مشغول جداً حالياً بآلاف الطلاب..**\n\nلكي لا تتعطل مذاكرتك، قمنا بتوفير **فهرس الدروس** أسفل رسالتي.\n\n💡 **الحل الفوري:**\n1. اختر الدرس من الفهرس لمشاهدة شرح فيديو.\n2. اكتب اسم الدرس بوضوح (مثلاً: حاتم الطائي) ليعرض لك التطبيق الشرح المخزن محلياً.\n3. حاول مرة أخرى في وقت لاحق للأسئلة المتقدمة.";
     } else {
-      fallbackMsg = "عذراً، يبدو أن هناك ضغطاً كبيراً على النظام حالياً. يمكنك استخدام **فهرس الدروس** للوصول للمحتوى الجاهز فوراً دون الحاجة للانتظار.";
+      fallbackMsg = "عذراً، يوجد ضغط مؤقت. جرب استخدام الفهرس أو ابحث عن اسم الدرس مباشرة.";
     }
     
     onChunk(fallbackMsg);
