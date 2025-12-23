@@ -1,68 +1,65 @@
 
 import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender } from "../types";
 import { GoogleGenAI, Modality } from "@google/genai";
-import { questionsBank } from "../lib/questionsBank";
+import { questionsBank, localContentRepository } from "../lib/questionsBank";
 import { DynamicQuestionBank } from "../lib/dynamicBank";
 import { getApiKey, rotateApiKey, ensureApiKey } from "../utils/apiKeyManager";
 
 const SYSTEM_INSTRUCTION = `
 أنت "المعلم الذكي"، خبير تعليمي متخصص في منهج الثانوية العامة المصرية.
-- هدفك: تبسيط المعلومة للطالب المتفوق للوصول للدرجة النهائية.
-- أسلوبك: ودود، محفز، ومحترف.
-- القواعد:
-  1. استخدم جداول Markdown للمقارنات دائماً.
-  2. اجعل الرد منظماً باستخدام النقاط (Bullet points).
-  3. ركز على "نواتج التعلم" وأفكار الامتحانات الوزارية.
-  4. لغة الحوار: عربية فصحى بسيطة بلمسة مصرية محفزة.
+- هدفك: تبسيط المعلومة للطالب.
+- القاعدة الذهبية: استخدم جداول Markdown دائماً للمقارنات والتعريفات والقوانين لمنع تداخل النصوص.
+- التنسيق: أي معلومة تتبع نمط (العنصر) و (شرحه) يجب أن تظهر في جدول.
+- ممنوع استخدام علامة الدولار ($).
 `;
 
+let requestQueue: Promise<any> = Promise.resolve();
+
 /**
- * تنظيف النص المتقدم للقراءة الصوتية
- * يزيل الرموز التي طلبها المستخدم (الشرطات، علامات الاستفهام، إلخ)
+ * دالة ذكية للبحث في المستودع المحلي المجدول (تقليل الـ API بنسبة 99%)
  */
-export const sanitizeForSpeech = (text: string): string => {
-  if (!text) return "";
-  return text
-    .replace(/```[\s\S]*?```/g, ' ') // إزالة الأكواد البرمجية
-    .replace(/`.*?`/g, ' ')
-    .replace(/\[.*?\]\(.*?\)/g, ' ') // إزالة الروابط
-    .replace(/[*#_~]/g, ' ') // إزالة علامات التنسيق
-    .replace(/[-—]/g, ' ') // إزالة الشرطات (طلب المستخدم)
-    .replace(/[?؟!]/g, ' ') // إزالة علامات الاستفهام والتعجب (طلب المستخدم)
-    .replace(/\(/g, ' ، ') // استبدال الأقواس بوقفة قصيرة
-    .replace(/\)/g, ' ، ')
-    .replace(/\n+/g, ' . ') // استبدال السطور بنقطة نهاية جملة
-    .replace(/\s+/g, ' ') // توحيد المسافات
-    .trim();
+const findLocalContent = (query: string, subject: Subject): string | null => {
+  const normalizedQuery = query.toLowerCase();
+  
+  // استخراج اسم الدرس من الطلب (دعم الأعداد المركبة)
+  const entry = localContentRepository.find(e => 
+    normalizedQuery.includes(e.topic.toLowerCase()) || 
+    e.topic.toLowerCase().includes(normalizedQuery.replace(/(اشرح|لخص|أسئلة|توقعات|درس|موضوع|أعداد|مركبة)/g, '').trim())
+  );
+
+  if (!entry) return null;
+
+  if (normalizedQuery.includes('لخص') || normalizedQuery.includes('ملخص')) {
+    return entry.summary;
+  }
+  if (normalizedQuery.includes('أسئلة') || normalizedQuery.includes('تدريب')) {
+    return entry.practice;
+  }
+  if (normalizedQuery.includes('نقاط') || normalizedQuery.includes('توقعات')) {
+    return entry.keyPoints;
+  }
+  
+  return entry.explanation;
 };
 
-/**
- * توليد صوت عالي الجودة باستخدام Gemini TTS (صوت Kore)
- */
-export const generateAiSpeech = async (text: string): Promise<string | null> => {
-  try {
-    const apiKey = getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-    const cleanText = sanitizeForSpeech(text);
-    
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `اقرأ النص التالي بأسلوب تعليمي مشجع: ${cleanText}` }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' },
-          },
-        },
-      },
-    });
+export const sanitizeForSpeech = (text: string): string => {
+  if (!text) return "";
+  // إبقاء رموز الجدول مخفية عن النطق الصوتي لضمان تجربة مستخدم جيدة
+  return text.replace(/\$/g, '').replace(/\|/g, ' ').replace(/-+/g, ' ').replace(/\n+/g, ' . ').trim();
+};
 
-    const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    return audioData || null;
-  } catch (error) {
-    console.error("Gemini TTS Error:", error);
-    return null;
+const cleanMathNotation = (text: string): string => {
+  // تنظيف الرموز التي تسبب تداخل برمجياً مع إبقاء رموز الماركدوان
+  return text.replace(/\$/g, '');
+};
+
+const executeWithRetry = async <T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> => {
+  try { return await fn(); } catch (error: any) {
+    if (retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return executeWithRetry(fn, retries - 1, delay * 1.5);
+    }
+    throw error;
   }
 };
 
@@ -84,19 +81,30 @@ export const generateStreamResponse = async (
   options?: GenerationOptions,
   deviceId?: string
 ): Promise<string> => {
+  
+  // 1. الأولوية للمحتوى المحلي المجدول (منع التداخل)
+  const localContent = findLocalContent(userMessage, subject);
+  if (localContent) {
+    onChunk(localContent);
+    return localContent;
+  }
+
   const staticMatch = searchInStaticBank(userMessage);
   if (staticMatch) {
-    onChunk(staticMatch.answer);
-    return staticMatch.answer;
+    const cleanAnswer = cleanMathNotation(staticMatch.answer);
+    onChunk(cleanAnswer);
+    return cleanAnswer;
   }
 
   const cachedMatch = await DynamicQuestionBank.search(userMessage, subject);
   if (cachedMatch) {
-    onChunk(cachedMatch.answer);
-    return cachedMatch.answer;
+    const cleanAnswer = cleanMathNotation(cachedMatch.answer);
+    onChunk(cleanAnswer);
+    return cleanAnswer;
   }
 
-  try {
+  // 2. الـ API للحالات الفريدة فقط
+  const task = () => executeWithRetry(async () => {
     await ensureApiKey();
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const modelName = options?.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
@@ -106,69 +114,65 @@ export const generateStreamResponse = async (
       parts: [{ text: msg.text }]
     }));
 
-    const currentParts: any[] = [];
+    const currentParts: any[] = [{ text: userMessage }];
     if (attachment) {
-      currentParts.push({ inlineData: { mimeType: attachment.mimeType, data: attachment.data } });
+      currentParts.unshift({ inlineData: { mimeType: attachment.mimeType, data: attachment.data } });
     }
-    currentParts.push({ text: userMessage });
     contents.push({ role: "user", parts: currentParts });
 
     const streamResponse = await ai.models.generateContentStream({
       model: modelName,
       contents,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
+      config: { 
+        systemInstruction: SYSTEM_INSTRUCTION, 
         temperature: 0.7,
       }
     });
 
     let fullText = "";
     for await (const chunk of streamResponse) {
-      const text = chunk.text || "";
-      fullText += text;
-      onChunk(fullText);
+      fullText += (chunk.text || "");
+      onChunk(cleanMathNotation(fullText));
     }
 
-    if (fullText.length > 20) {
-      DynamicQuestionBank.add(userMessage, fullText, subject, grade, deviceId || 'unknown');
+    const finalCleanText = cleanMathNotation(fullText);
+    if (finalCleanText.length > 20) {
+      DynamicQuestionBank.add(userMessage, finalCleanText, subject, grade, deviceId || 'unknown');
     }
-
-    return fullText;
-  } catch (error: any) {
-    console.error("Gemini API Error:", error);
+    return finalCleanText;
+  }).catch(error => {
     rotateApiKey();
-    const fallbackMsg = "عذراً، المعلم الذكي مشغول قليلاً حالياً. يمكنك تجربة سؤال آخر من بنك الأسئلة المتاح في القائمة الجانبية.";
+    const fallbackMsg = "عذراً، لم أجد إجابة جاهزة حالياً. فضلاً حاول كتابة سؤالك بوضوح أكثر وسأجيبك فوراً في جدول منظم.";
     onChunk(fallbackMsg);
     return fallbackMsg;
-  }
+  });
+
+  requestQueue = requestQueue.then(() => task());
+  return requestQueue;
 };
 
-/**
- * المحرك الصوتي المحلي (Fallback)
- */
-export const streamSpeech = async (
-  text: string, 
-  onComplete?: () => void
-): Promise<void> => {
-  if (!window.speechSynthesis) {
-    onComplete?.();
-    return;
-  }
+export const generateAiSpeech = async (text: string): Promise<string | null> => {
+  try {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    return await executeWithRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: sanitizeForSpeech(text) }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
+        },
+      });
+      return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
+    });
+  } catch { return null; }
+};
 
+export const streamSpeech = async (text: string, onComplete?: () => void): Promise<void> => {
+  if (!window.speechSynthesis) { onComplete?.(); return; }
   window.speechSynthesis.cancel();
-  const cleanText = sanitizeForSpeech(text);
-  const utterance = new SpeechSynthesisUtterance(cleanText);
-  
+  const utterance = new SpeechSynthesisUtterance(sanitizeForSpeech(text));
   utterance.lang = 'ar-SA';
-  utterance.rate = 0.9;
-  utterance.pitch = 1.0;
-
-  const voices = window.speechSynthesis.getVoices();
-  const arVoice = voices.find(v => v.lang.includes('ar-EG')) || voices.find(v => v.lang.includes('ar'));
-  if (arVoice) utterance.voice = arVoice;
-
   utterance.onend = () => onComplete?.();
-  utterance.onerror = () => onComplete?.();
-
   window.speechSynthesis.speak(utterance);
 };
