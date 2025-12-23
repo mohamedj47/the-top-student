@@ -130,26 +130,26 @@ const App: React.FC = () => {
         onClose={() => setIsTutorialOpen(false)}
       />
       
-      {/* شريط الاشتراك المختصر (Compact Banner) */}
+      {/* شريط الاشتراك الموحد (Desktop & Mobile) */}
       {isTrialActive && !isCurrentGradeSubscribed && trialTimeLeft && (
           <div className="sticky top-0 z-[100] w-full no-print">
             <button 
               onClick={() => setIsManualSubscriptionOpen(true)}
-              className="w-full bg-slate-900 text-white py-1.5 px-4 flex items-center justify-center gap-4 hover:bg-slate-800 transition-all border-b border-indigo-500/30"
+              className="w-full bg-slate-900 text-white py-2 px-3 flex items-center justify-center gap-2 md:gap-4 hover:bg-slate-800 transition-all border-b border-indigo-500/30"
             >
-              <div className="flex items-center gap-1.5">
-                <BadgePercent size={16} className="text-yellow-400" />
-                <span className="text-xs md:text-sm font-black">🎁 خصم 20% لفترة محدودة! اشترك الآن</span>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <BadgePercent size={16} className="text-yellow-400 shrink-0" />
+                <span className="text-[10px] sm:text-xs md:text-sm font-black leading-tight">بمناسبة الإطلاق، خصم 70%! ادفع 90 جنيه شهريًا فقط لجميع المواد بدلاً من 300.</span>
               </div>
               
-              <div className="h-4 w-px bg-white/20"></div>
+              <div className="h-4 w-px bg-white/20 shrink-0"></div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <Clock size={14} className="text-indigo-400" />
-                <span className="font-mono text-xs md:text-sm font-bold text-indigo-300">
+                <span className="font-mono text-[10px] sm:text-xs md:text-sm font-bold text-indigo-300 whitespace-nowrap">
                   ينتهي خلال: {trialTimeLeft}
                 </span>
-                <Sparkles size={12} className="text-yellow-400 animate-pulse" />
+                <Sparkles size={12} className="text-yellow-400 animate-pulse hidden xs:inline" />
               </div>
             </button>
           </div>
