@@ -17,39 +17,41 @@ let requestQueue: Promise<any> = Promise.resolve();
 
 /**
  * دالة البحث المحلي الذكية (Smart Offline Matcher)
- * الحل الجذري لمنع رسائل "النظام مشغول"
  */
 const findLocalContent = (query: string, subject: Subject): string | null => {
   const normalizedQuery = query.toLowerCase().trim();
   
-  // تنظيف السؤال من الكلمات الزائدة للوصول لجوهر الدرس
-  const junkWords = ["اشرح", "لي", "درس", "بالتفصيل", "والأمثلة", "أريد", "عن", "موضوع", "ممكن", "أهم", "نقاط", "توقعات", "الوحدة الأولى", "الوحدة الثانية", "الوحدة الثالثة"];
+  // كلمات شائعة يجب إزالتها للوصول لاسم الدرس الحقيقي
+  const junkWords = [
+    "اشرح", "لي", "درس", "بالتفصيل", "والأمثلة", "أريد", "عن", "موضوع", 
+    "ممكن", "أهم", "نقاط", "توقعات", "الوحدة الأولى", "الوحدة الثانية", 
+    "الوحدة الثالثة", "الدرس الأول", "شرح"
+  ];
+  
   let coreTopic = normalizedQuery;
   junkWords.forEach(word => {
     coreTopic = coreTopic.split(word).join(' ').trim();
   });
-  // إزالة الأقواس والرموز
+  
+  // إزالة الرموز الزائدة
   coreTopic = coreTopic.replace(/[()""'']/g, ' ').replace(/\s+/g, ' ').trim();
 
-  // البحث عن أقرب درس في المستودع المحلي
+  // البحث في المستودع المحلي
   const entry = localContentRepository.find(e => 
     normalizedQuery.includes(e.topic.toLowerCase()) || 
     e.topic.toLowerCase().includes(coreTopic) ||
-    (coreTopic.length > 4 && e.topic.toLowerCase().includes(coreTopic)) ||
-    (coreTopic.length > 4 && coreTopic.includes(e.topic.toLowerCase()))
+    (coreTopic.length > 3 && e.topic.toLowerCase().includes(coreTopic))
   );
 
   if (!entry) return null;
 
-  // توجيه المحتوى حسب نوع الطلب
-  if (normalizedQuery.includes('لخص') || normalizedQuery.includes('ملخص') || normalizedQuery.includes('نقاط')) {
+  if (normalizedQuery.includes('لخص') || normalizedQuery.includes('ملخص')) {
     return entry.summary + "\n\n" + entry.keyPoints;
   }
   if (normalizedQuery.includes('أسئلة') || normalizedQuery.includes('تدريب')) {
     return entry.practice;
   }
   
-  // في حالة الطلب العام أو الشرح
   return entry.explanation + "\n\n" + entry.keyPoints + "\n\n" + entry.practice;
 };
 
@@ -72,7 +74,7 @@ const executeWithFullKeyRotation = async <T>(fn: (apiKey: string) => Promise<T>)
       return await fn(currentKey);
     } catch (error: any) {
       lastError = error;
-      if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('API_KEY_INVALID')) {
+      if (error?.status === 429 || error?.message?.includes('429')) {
         rotateApiKey();
         await new Promise(resolve => setTimeout(resolve, 300));
       } else {
@@ -102,28 +104,14 @@ export const generateStreamResponse = async (
   deviceId?: string
 ): Promise<string> => {
   
-  // 1. الأولوية القصوى للمستودع المحلي (يعمل فوراً وبدقة 100% وبدون API)
+  // 1. الأولوية للمستودع المحلي
   const localContent = findLocalContent(userMessage, subject);
   if (localContent) {
     onChunk(localContent);
     return localContent;
   }
 
-  const staticMatch = searchInStaticBank(userMessage);
-  if (staticMatch) {
-    const cleanAnswer = cleanMathNotation(staticMatch.answer);
-    onChunk(cleanAnswer);
-    return cleanAnswer;
-  }
-
-  const cachedMatch = await DynamicQuestionBank.search(userMessage, subject);
-  if (cachedMatch) {
-    const cleanAnswer = cleanMathNotation(cachedMatch.answer);
-    onChunk(cleanAnswer);
-    return cleanAnswer;
-  }
-
-  // 2. استخدام الـ API كحل أخير للأسئلة الفريدة جداً
+  // 2. استخدام الـ API مع نظام التدوير
   const task = () => executeWithFullKeyRotation(async (apiKey) => {
     await ensureApiKey();
     const ai = new GoogleGenAI({ apiKey });
@@ -161,18 +149,8 @@ export const generateStreamResponse = async (
     }
     return finalCleanText;
   }).catch(error => {
-    const hour = new Date().getHours();
-    const isPeakTime = hour >= 17 || hour <= 1;
-    
-    let fallbackMsg = "";
-    if (isPeakTime) {
-      fallbackMsg = "⚠️ **النظام مشغول جداً حالياً بآلاف الطلاب..**\n\nلكي لا تتعطل مذاكرتك، قمنا بتوفير **فهرس الدروس** أسفل رسالتي.\n\n💡 **الحل الفوري:**\n1. اختر الدرس من الفهرس لمشاهدة شرح فيديو.\n2. اكتب اسم الدرس بوضوح (مثلاً: حاتم الطائي) ليعرض لك التطبيق الشرح المخزن محلياً.\n3. حاول مرة أخرى في وقت لاحق للأسئلة المتقدمة.";
-    } else {
-      fallbackMsg = "عذراً، يوجد ضغط مؤقت. جرب استخدام الفهرس أو ابحث عن اسم الدرس مباشرة.";
-    }
-    
-    onChunk(fallbackMsg);
-    return fallbackMsg;
+    onChunk("⚠️ **النظام غير قادر على الاتصال بالـ API حالياً.**\n\nيرجى التأكد من إضافة مفتاح API_KEY في إعدادات Vercel.\n\nيمكنك تجربة كتابة اسم الدرس بوضوح مثل 'حاتم الطائي' لاستخدام الشرح المحلي المخزن.");
+    return "error";
   });
 
   requestQueue = requestQueue.then(() => task());
