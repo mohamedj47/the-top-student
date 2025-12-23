@@ -170,9 +170,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
                   className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-700"
                >
                    <option value="">-- اختر الصف --</option>
-                   <option value="الصف الأول الثانوي">الصف الأول الثانوي (خصم 20%)</option>
-                   <option value="الصف الثاني الثانوي">الصف الثاني الثانوي (خصم 20%)</option>
-                   <option value="الصف الثالث الثانوي">الصف الثالث الثانوي (خصم 20%)</option>
+                   <option value="الصف الأول الثانوي">الصف الأول الثانوي (خصم 70%)</option>
+                   <option value="الصف الثاني الثانوي">الصف الثاني الثانوي (خصم 70%)</option>
+                   <option value="الصف الثالث الثانوي">الصف الثالث الثانوي (خصم 70%)</option>
                </select>
            </div>
 
