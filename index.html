@@ -3,7 +3,7 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="UTF-8", initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>نظام الثانوية الذكي</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -30,6 +30,31 @@
       .markdown-body li { margin-bottom: 0.5rem; line-height: 2; font-size: 1.05em; }
       .markdown-body strong { color: #4338ca; font-weight: 800; }
       
+      /* Table Styles - Fixed for Clarity */
+      .markdown-body table { 
+        border-collapse: collapse; 
+        width: 100%; 
+        margin: 1.5rem 0; 
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .markdown-body th { 
+        background-color: #f1f5f9; 
+        color: #1e293b; 
+        font-weight: 900; 
+        padding: 12px;
+        border: 1px solid #e2e8f0;
+        text-align: right;
+      }
+      .markdown-body td { 
+        padding: 12px; 
+        border: 1px solid #e2e8f0; 
+        color: #334155;
+        line-height: 1.6;
+      }
+      .markdown-body tr:nth-child(even) { background-color: #f8fafc; }
+
       /* Animations */
       .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
       .typing-dot:nth-child(1) { animation-delay: -0.32s; }
@@ -47,7 +72,6 @@
         .chat-container { display: block !important; height: auto !important; overflow: visible !important; width: 100% !important; position: static !important; }
         .markdown-body { color: black !important; background: white !important; border: 1px solid #eee !important; page-break-inside: avoid !important; margin-bottom: 1cm !important; width: 100% !important; }
         .user-message-bubble { border: none !important; background: #f0f0f0 !important; color: #333 !important; }
-        code { border: 1px solid #333 !important; color: black !important; background: white !important; }
       }
     </style>
   <script type="importmap">
@@ -65,7 +89,6 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="root">
@@ -75,7 +98,6 @@
             <style> @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } </style>
         </div>
     </div>
-    <!-- FIXED: Point to local file absolutely. No importmaps. -->
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
