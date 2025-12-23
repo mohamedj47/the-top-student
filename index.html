@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
   <head>
@@ -55,7 +56,6 @@
       }
       .markdown-body tr:nth-child(even) { background-color: #f8fafc; }
 
-      /* Visual Polish and Animations */
       .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
       .typing-dot:nth-child(1) { animation-delay: -0.32s; }
       .typing-dot:nth-child(2) { animation-delay: -0.16s; }
@@ -64,7 +64,6 @@
       @keyframes popIn { 0% { opacity: 0; transform: scale(0.95) translateY(10px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
       .pop-in { animation: popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
-      /* Print Optimizations */
       @media print {
         @page { margin: 1.5cm; size: A4; }
         html, body, #root { height: auto !important; min-height: 0 !important; overflow: visible !important; display: block !important; }
@@ -90,13 +89,8 @@
 </script>
 </head>
   <body>
-    <div id="root">
-        <div style="height: 100vh; width: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #f8fafc; font-family: 'Cairo', sans-serif;">
-            <div style="width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #4f46e5; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-            <h2 style="margin-top: 20px; color: #475569; font-weight: bold;">جاري تحميل المعلم الذكي...</h2>
-            <style> @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } </style>
-        </div>
-    </div>
-    <script type="module" src="/src/index.tsx"></script>
+    <div id="root"></div>
+    <!-- Fix: script path corrected from /src/index.tsx to /index.tsx -->
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
