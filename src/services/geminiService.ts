@@ -3,7 +3,7 @@ import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender } f
 import { GoogleGenAI, Modality } from "@google/genai";
 import { questionsBank, localContentRepository } from "../lib/questionsBank";
 import { DynamicQuestionBank } from "../lib/dynamicBank";
-import { getApiKey, rotateApiKey, ensureApiKey } from "../utils/apiKeyManager";
+import { getApiKey, rotateApiKey, ensureApiKey, getAvailableKeysCount } from "../utils/apiKeyManager";
 
 const SYSTEM_INSTRUCTION = `
 أنت "المعلم الذكي"، خبير تعليمي متخصص في منهج الثانوية العامة المصرية.
@@ -21,10 +21,10 @@ let requestQueue: Promise<any> = Promise.resolve();
 const findLocalContent = (query: string, subject: Subject): string | null => {
   const normalizedQuery = query.toLowerCase();
   
-  // استخراج اسم الدرس من الطلب (دعم الأعداد المركبة)
+  // استخراج اسم الدرس من الطلب
   const entry = localContentRepository.find(e => 
     normalizedQuery.includes(e.topic.toLowerCase()) || 
-    e.topic.toLowerCase().includes(normalizedQuery.replace(/(اشرح|لخص|أسئلة|توقعات|درس|موضوع|أعداد|مركبة)/g, '').trim())
+    e.topic.toLowerCase().includes(normalizedQuery.replace(/(اشرح|لخص|أسئلة|توقعات|درس|موضوع|أعداد|مركبة|عن|ممكن)/g, '').trim())
   );
 
   if (!entry) return null;
@@ -44,18 +44,20 @@ const findLocalContent = (query: string, subject: Subject): string | null => {
 
 export const sanitizeForSpeech = (text: string): string => {
   if (!text) return "";
-  // إبقاء رموز الجدول مخفية عن النطق الصوتي لضمان تجربة مستخدم جيدة
   return text.replace(/\$/g, '').replace(/\|/g, ' ').replace(/-+/g, ' ').replace(/\n+/g, ' . ').trim();
 };
 
 const cleanMathNotation = (text: string): string => {
-  // تنظيف الرموز التي تسبب تداخل برمجياً مع إبقاء رموز الماركدوان
   return text.replace(/\$/g, '');
 };
 
-const executeWithRetry = async <T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> => {
+const executeWithRetry = async <T>(fn: () => Promise<T>, retries = 3, delay = 1500): Promise<T> => {
   try { return await fn(); } catch (error: any) {
     if (retries > 0) {
+      // إذا كان الخطأ متعلق بالـ Quota (429)، نقوم بتدوير المفتاح فوراً
+      if (error?.status === 429 || error?.message?.includes('429')) {
+        rotateApiKey();
+      }
       await new Promise(resolve => setTimeout(resolve, delay));
       return executeWithRetry(fn, retries - 1, delay * 1.5);
     }
@@ -82,7 +84,7 @@ export const generateStreamResponse = async (
   deviceId?: string
 ): Promise<string> => {
   
-  // 1. الأولوية للمحتوى المحلي المجدول (منع التداخل)
+  // 1. الأولوية للمحتوى المحلي (سريع ومجاني)
   const localContent = findLocalContent(userMessage, subject);
   if (localContent) {
     onChunk(localContent);
@@ -141,8 +143,16 @@ export const generateStreamResponse = async (
     }
     return finalCleanText;
   }).catch(error => {
-    rotateApiKey();
-    const fallbackMsg = "عذراً، لم أجد إجابة جاهزة حالياً. فضلاً حاول كتابة سؤالك بوضوح أكثر وسأجيبك فوراً في جدول منظم.";
+    // في حالة فشل كل المحاولات والـ API Keys
+    const isPeakHour = new Date().getHours() >= 18 && new Date().getHours() <= 23;
+    let fallbackMsg = "";
+    
+    if (isPeakHour) {
+      fallbackMsg = "⚠️ **نعتذر منك يا بطل.. النظام مشغول حالياً بسبب ضغط المذاكرة في أوقات الذروة.**\n\nبما أننا نستخدم النسخة المجانية، فقد وصلنا للحد الأقصى من الأسئلة لهذا الموعد.\n\n💡 **ماذا يمكنك أن تفعل الآن؟**\n1. تصفح **فهرس الدروس** من القائمة بالأعلى (يعمل دائماً).\n2. جرب سؤالاً آخر من الأسئلة المقترحة.\n3. حاول مرة أخرى بعد قليل.";
+    } else {
+      fallbackMsg = "عذراً، يبدو أن هناك مشكلة مؤقتة في الاتصال بخوادم الذكاء الاصطناعي. جرب كتابة سؤالك بوضوح أو اختر درساً من الفهرس لنعرض لك شرحه الجاهز.";
+    }
+    
     onChunk(fallbackMsg);
     return fallbackMsg;
   });
