@@ -175,6 +175,7 @@ export default function SmartTutorPage() {
         timestamp: new Date() 
       }]);
 
+      // Fix: Removed the extra getStudentId() argument to correctly call generateStreamResponse with its 7 parameters.
       await generateStreamResponse(
         textToSend,
         GradeLevel.GRADE_12,
@@ -184,8 +185,7 @@ export default function SmartTutorPage() {
           setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, text: chunk } : m));
         },
         undefined,
-        undefined,
-        getStudentId()
+        undefined
       );
     } catch (error) {
       setMessages(prev => [...prev, { 
