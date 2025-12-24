@@ -116,7 +116,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
 
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.id === botMessageId ? { ...msg, isStreaming: false } : msg
+          msg.id === botMessageId ? { ...msg, isStreaming: false } : msg 
         )
       );
       setActiveKeyNum(getActiveKeyIndex());
