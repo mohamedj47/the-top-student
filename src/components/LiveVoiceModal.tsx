@@ -1,5 +1,4 @@
-
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Mic, MicOff, PhoneOff, Loader2, Activity } from 'lucide-react';
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 import { GradeLevel, Subject } from '../types';
@@ -95,7 +94,8 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose,
         5. ابدأ المحادثة بالترحيب وسؤاله "جاهز نذاكر سوا يا بطل؟"
       `;
 
-      const session = await ai.live.connect({
+      // FIX: Rely on sessionPromise for sends to prevent race condition during session initialization
+      const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         config: {
           responseModalities: [Modality.AUDIO],
@@ -128,11 +128,14 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose,
 
               const base64Data = encodeAudio(inputData);
               
-              session.sendRealtimeInput({
-                media: {
-                  mimeType: 'audio/pcm;rate=16000',
-                  data: base64Data
-                }
+              // FIX: Use sessionPromise.then() to ensure the session is ready before sending input
+              sessionPromise.then((session) => {
+                session.sendRealtimeInput({
+                  media: {
+                    mimeType: 'audio/pcm;rate=16000',
+                    data: base64Data
+                  }
+                });
               });
             };
 
@@ -207,7 +210,8 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose,
         }
       });
       
-      sessionRef.current = session;
+      // FIX: Await and store session for explicit resource management
+      sessionRef.current = await sessionPromise;
 
     } catch (e) {
       console.error(e);
@@ -230,9 +234,13 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose,
     
     return () => {
       mountedRef.current = false;
-      // Cleanup
+      // FIX: Explicitly close the session to release connection resources
       if (sessionRef.current) {
-         // sessionRef.current.close(); // LiveClient doesn't have explicit close, just drop connection
+         try {
+           sessionRef.current.close();
+         } catch (e) {
+           console.error("Error closing Live session", e);
+         }
       }
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach(track => track.stop());
