@@ -35,7 +35,7 @@ export const FloatingTools: React.FC = () => {
     window.print();
   };
 
-  const scheduleChunk = (base64: string) => {
+  const playAudioData = async (base64: string, source: 'gemini' | 'elevenlabs') => {
     const ctx = audioContextRef.current;
     if (!ctx) return;
 
@@ -45,22 +45,34 @@ export const FloatingTools: React.FC = () => {
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
-      const int16 = new Int16Array(bytes.buffer);
-      const float32 = new Float32Array(int16.length);
-      for (let i = 0; i < int16.length; i++) {
-        float32[i] = int16[i] / 32768.0;
+
+      let buffer: AudioBuffer;
+
+      if (source === 'elevenlabs') {
+        // ElevenLabs يعطي ملف MP3 مضغوط، نحتاج لفك ضغطه
+        buffer = await ctx.decodeAudioData(bytes.buffer);
+      } else {
+        // Gemini يعطي بيانات PCM خام Int16
+        const int16 = new Int16Array(bytes.buffer);
+        const float32 = new Float32Array(int16.length);
+        for (let i = 0; i < int16.length; i++) {
+          float32[i] = int16[i] / 32768.0;
+        }
+        buffer = ctx.createBuffer(1, float32.length, 24000);
+        buffer.getChannelData(0).set(float32);
       }
-      const buffer = ctx.createBuffer(1, float32.length, 24000);
-      buffer.getChannelData(0).set(float32);
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(ctx.destination);
+
+      const sourceNode = ctx.createBufferSource();
+      sourceNode.buffer = buffer;
+      sourceNode.connect(ctx.destination);
+      
       const startTime = Math.max(ctx.currentTime, nextStartTimeRef.current);
-      source.start(startTime);
+      sourceNode.start(startTime);
       nextStartTimeRef.current = startTime + buffer.duration;
-      sourcesRef.current.push(source);
-      source.onended = () => {
-        const index = sourcesRef.current.indexOf(source);
+      sourcesRef.current.push(sourceNode);
+
+      sourceNode.onended = () => {
+        const index = sourcesRef.current.indexOf(sourceNode);
         if (index > -1) sourcesRef.current.splice(index, 1);
         if (sourcesRef.current.length === 0 && ctx.currentTime >= nextStartTimeRef.current - 0.1) {
           setIsSpeaking(false);
@@ -68,7 +80,8 @@ export const FloatingTools: React.FC = () => {
         }
       };
     } catch (e) {
-      console.error("Schedule error", e);
+      console.error("Audio playback error", e);
+      stopAudio();
     }
   };
 
@@ -78,7 +91,6 @@ export const FloatingTools: React.FC = () => {
       return;
     }
 
-    // تجميع النص من الصفحة بشكل ذكي
     let textToRead = "";
     const contentElements = document.querySelectorAll('.markdown-body');
     if (contentElements.length > 0) {
@@ -108,14 +120,12 @@ export const FloatingTools: React.FC = () => {
       }
       nextStartTimeRef.current = audioContextRef.current.currentTime;
 
-      // Fix: Adjusting the call to use generateAiSpeech for high-quality audio
-      // and ensuring streamSpeech call matches its 2-argument signature.
-      const base64 = await generateAiSpeech(textToRead);
-      if (base64) {
-        setIsLoading(false);
-        scheduleChunk(base64);
+      const audioResult = await generateAiSpeech(textToRead);
+      setIsLoading(false);
+
+      if (audioResult) {
+        await playAudioData(audioResult.data, audioResult.source);
       } else {
-        setIsLoading(false);
         await streamSpeech(textToRead, () => {
           setIsSpeaking(false);
           isSpeakingRef.current = false;
