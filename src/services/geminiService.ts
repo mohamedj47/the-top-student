@@ -1,65 +1,76 @@
 
 import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender } from "../types";
 import { GoogleGenAI, Modality } from "@google/genai";
-import { localContentRepository, questionsBank } from "../lib/questionsBank";
-import { getApiKey, rotateApiKey, getAvailableKeysCount } from "../utils/apiKeyManager";
+import { questionsBank, localContentRepository } from "../lib/questionsBank";
+import { DynamicQuestionBank } from "../lib/dynamicBank";
+import { getApiKey, rotateApiKey, ensureApiKey } from "../utils/apiKeyManager";
 
 const SYSTEM_INSTRUCTION = `
-أنت "المعلم الذكي"، خبير في منهج الثانوية العامة المصرية. 
-- استخدم جداول Markdown للمقارنات.
-- بسط المعلومة كأنك في حصة مراجعة نهائية.
-- ممنوع استخدام رموز العملات ($).
+أنت "المعلم الذكي"، الخبير الأول في منهج الثانوية العامة المصرية.
+مهمتك تقديم "حل جذري" لتبسيط المعلومة بصرياً وذهنياً.
+
+- القاعدة الذهبية (إجبارية في كل رد):
+  1. **الشرح النصي**: في جداول Markdown منظمة.
+  2. **الوصف البصري**: تشبيه حياتي إبداعي أو كود HTML منسق.
+  3. **الرسم البياني (Mermaid)**: كود 'graph TD' فائق البساطة.
+
+- **تحذير أمني برمجيا**: يمنع منعاً باتاً استخدام علامة الدولار ($) أو رموز LaTeX المعقدة. اكتب المعادلات كمتن نصي عادي أو داخل جداول.
+- ابدأ دائماً بكلمة "تمام" لتأكيد الالتزام بالبروتوكول.
 `;
 
-/**
- * دالة التنفيذ مع التدوير التلقائي الفوري
- * إذا فشل مفتاح، يتم تجربة المفتاح التالي فوراً في نفس الطلب
- */
-const executeWithRetry = async <T>(operation: (ai: GoogleGenAI) => Promise<T>): Promise<T> => {
-  const maxAttempts = Math.max(getAvailableKeysCount(), 1);
-  let lastError: any;
+// دالة التطهير الجذرية - الحل النهائي لمشكلة الدولار
+export const cleanMathNotation = (text: string): string => {
+  if (!text) return "";
+  // إزالة كافة علامات الدولار (سواء كانت مفردة $ أو مزدوجة $$)
+  return text.replace(/\$/g, '');
+};
 
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error("لم يتم العثور على مفاتيح API");
-    
-    try {
-      const ai = new GoogleGenAI({ apiKey });
-      return await operation(ai);
-    } catch (error: any) {
-      lastError = error;
-      const isRateLimit = error?.status === 429 || error?.message?.includes('429');
-      
-      if (isRateLimit && attempt < maxAttempts - 1) {
-        console.warn(`Key ${attempt + 1} limited, rotating...`);
-        rotateApiKey();
-        continue; // جرب المفتاح التالي فوراً
-      }
-      throw error;
-    }
+let requestQueue: Promise<any> = Promise.resolve();
+
+const findLocalContent = (query: string, subject: Subject): string | null => {
+  const normalizedQuery = query.toLowerCase();
+  const entry = localContentRepository.find(e => 
+    normalizedQuery.includes(e.topic.toLowerCase()) || 
+    e.topic.toLowerCase().includes(normalizedQuery.replace(/(اشرح|لخص|أسئلة|توقعات|درس|موضوع|أعداد|مركبة)/g, '').trim())
+  );
+
+  if (!entry) return null;
+
+  let result = entry.explanation;
+  if (normalizedQuery.includes('لخص') || normalizedQuery.includes('ملخص')) {
+    result = entry.summary;
+  } else if (normalizedQuery.includes('أسئلة') || normalizedQuery.includes('تدريب')) {
+    result = entry.practice;
+  } else if (normalizedQuery.includes('نقاط') || normalizedQuery.includes('توقعات')) {
+    result = entry.keyPoints;
   }
-  throw lastError;
+  
+  return cleanMathNotation(result);
 };
 
-/**
- * دالة للبحث في البنك الثابت
- */
-// Fix: Added searchInStaticBank to handle local search requests
+export const sanitizeForSpeech = (text: string): string => {
+  if (!text) return "";
+  return text.replace(/\$/g, '').replace(/\|/g, ' ').replace(/-+/g, ' ').replace(/\n+/g, ' . ').trim();
+};
+
+const executeWithRetry = async <T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> => {
+  try { return await fn(); } catch (error: any) {
+    if (retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return executeWithRetry(fn, retries - 1, delay * 1.5);
+    }
+    throw error;
+  }
+};
+
 export const searchInStaticBank = (query: string) => {
-  const normalized = query.toLowerCase();
-  return questionsBank.find(q => normalized.includes(q.question.toLowerCase()) || q.question.toLowerCase().includes(normalized));
-};
-
-/**
- * دالة مساعدة لتحويل النص لحديث باستخدام المحرك المحلي كبديل
- */
-// Fix: Added streamSpeech as a fallback for audio generation using window.speechSynthesis
-export const streamSpeech = async (text: string, onEnd: () => void) => {
-  if (!window.speechSynthesis) return;
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'ar-SA';
-  utterance.onend = onEnd;
-  window.speechSynthesis.speak(utterance);
+  const normalizedQuery = query.trim().toLowerCase();
+  const match = questionsBank.find(q => 
+    normalizedQuery.includes(q.question.toLowerCase()) || 
+    q.question.toLowerCase().includes(normalizedQuery)
+  );
+  if (match) return { ...match, answer: cleanMathNotation(match.answer) };
+  return null;
 };
 
 export const generateStreamResponse = async (
@@ -69,61 +80,84 @@ export const generateStreamResponse = async (
   history: Message[],
   onChunk: (text: string) => void,
   attachment?: Attachment,
-  options?: GenerationOptions
+  options?: GenerationOptions,
+  deviceId?: string
 ): Promise<string> => {
   
-  // 1. البحث في البنك المحلي أولاً (سرعة 24/7 مضمونة)
-  const normalized = userMessage.toLowerCase();
-  const local = localContentRepository.find(e => normalized.includes(e.topic.toLowerCase()));
-  if (local && !attachment) {
-    onChunk(local.explanation);
-    return local.explanation;
+  const localContent = findLocalContent(userMessage, subject);
+  if (localContent) {
+    onChunk(localContent);
+    return localContent;
   }
 
-  // 2. الاستعانة بالذكاء الاصطناعي مع نظام التدوير
-  try {
-    return await executeWithRetry(async (ai) => {
-      const model = options?.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
-      
-      const contents = history.slice(-4).map(m => ({
-        role: m.sender === Sender.USER ? 'user' : 'model' as any,
-        parts: [{ text: m.text }]
-      }));
+  const staticMatch = searchInStaticBank(userMessage);
+  if (staticMatch) {
+    onChunk(staticMatch.answer);
+    return staticMatch.answer;
+  }
 
-      const currentParts: any[] = [{ text: userMessage }];
-      if (attachment) {
-        currentParts.unshift({ 
-          inlineData: { mimeType: attachment.mimeType, data: attachment.data } 
-        });
+  const cachedMatch = await DynamicQuestionBank.search(userMessage, subject);
+  if (cachedMatch) {
+    const cleanAnswer = cleanMathNotation(cachedMatch.answer);
+    onChunk(cleanAnswer);
+    return cleanAnswer;
+  }
+
+  const task = () => executeWithRetry(async () => {
+    await ensureApiKey();
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const modelName = 'gemini-3-flash-preview';
+    
+    const contents = history.slice(-6).map(msg => ({
+      role: msg.sender === Sender.USER ? 'user' : 'model' as any,
+      parts: [{ text: msg.text }]
+    }));
+
+    const currentParts: any[] = [{ text: userMessage }];
+    if (attachment) {
+      currentParts.unshift({ inlineData: { mimeType: attachment.mimeType, data: attachment.data } });
+    }
+    contents.push({ role: "user", parts: currentParts });
+
+    const streamResponse = await ai.models.generateContentStream({
+      model: modelName,
+      contents,
+      config: { 
+        systemInstruction: SYSTEM_INSTRUCTION, 
+        temperature: 0.7,
       }
-      contents.push({ role: "user", parts: currentParts });
-
-      const result = await ai.models.generateContentStream({
-        model,
-        contents,
-        config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.7 }
-      });
-
-      let fullText = "";
-      for await (const chunk of result) {
-        fullText += (chunk.text || "");
-        onChunk(fullText);
-      }
-      return fullText;
     });
-  } catch (error) {
-    const fallback = "⚠️ المعلم مشغول حالياً بضغط كبير من الطلاب. يرجى تجربة الدروس المسجلة في الفهرس أو المحاولة بعد دقائق.";
-    onChunk(fallback);
-    return fallback;
-  }
+
+    let fullText = "";
+    for await (const chunk of streamResponse) {
+      fullText += (chunk.text || "");
+      // تطهير مستمر أثناء البث
+      onChunk(cleanMathNotation(fullText));
+    }
+
+    const finalCleanText = cleanMathNotation(fullText);
+    if (finalCleanText.length > 20) {
+      DynamicQuestionBank.add(userMessage, finalCleanText, subject, grade, deviceId || 'unknown');
+    }
+    return finalCleanText;
+  }).catch(error => {
+    rotateApiKey();
+    const fallbackMsg = "عذراً، لم أجد إجابة جاهزة حالياً. فضلاً حاول كتابة سؤالك بوضوح أكثر وسأجيبك فوراً.";
+    onChunk(fallbackMsg);
+    return fallbackMsg;
+  });
+
+  requestQueue = requestQueue.then(() => task());
+  return requestQueue;
 };
 
 export const generateAiSpeech = async (text: string): Promise<string | null> => {
   try {
-    return await executeWithRetry(async (ai) => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    return await executeWithRetry(async () => {
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: text.substring(0, 500) }] }],
+        contents: [{ parts: [{ text: sanitizeForSpeech(text) }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
@@ -132,4 +166,13 @@ export const generateAiSpeech = async (text: string): Promise<string | null> => 
       return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
     });
   } catch { return null; }
+};
+
+export const streamSpeech = async (text: string, onComplete?: () => void): Promise<void> => {
+  if (!window.speechSynthesis) { onComplete?.(); return; }
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(sanitizeForSpeech(text));
+  utterance.lang = 'ar-SA';
+  utterance.onend = () => onComplete?.();
+  window.speechSynthesis.speak(utterance);
 };
