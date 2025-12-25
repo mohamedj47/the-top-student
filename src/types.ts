@@ -1,4 +1,5 @@
 
+
 export enum GradeLevel {
   GRADE_10 = 'الصف الأول الثانوي',
   GRADE_11 = 'الصف الثاني الثانوي',
@@ -40,9 +41,12 @@ export interface Message {
   id: string;
   text: string;
   sender: Sender;
-  timestamp: Date; 
+  timestamp: Date;
   isStreaming?: boolean;
   attachment?: Attachment;
+  // Added optional properties to support simplified explanation features and fix build errors
+  simplifiedText?: string;
+  visualDescription?: string;
 }
 
 export interface ChatSession {
