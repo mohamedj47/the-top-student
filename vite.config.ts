@@ -2,7 +2,6 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import process from 'node:process';
 
-// FIX: Explicitly importing process from node:process to ensure 'cwd' and 'env' are correctly typed and available.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   
@@ -26,12 +25,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       assetsDir: 'assets',
-      sourcemap: false,
-      rollupOptions: {
-        input: {
-          main: './index.html'
-        }
-      }
+      sourcemap: false
     }
   };
 });
