@@ -73,46 +73,76 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
   const [isSimplifyModalOpen, setIsSimplifyModalOpen] = useState(false);
   
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // تطهير النص قبل عرضه لضمان عدم وجود $ نهائياً
   const displayChatText = cleanMathNotation(message.text);
 
+  const stopAudio = () => {
+    if (sourceRef.current) {
+      try { sourceRef.current.stop(); } catch(e) {}
+      sourceRef.current = null;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+  };
+
   const handleSpeech = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isSpeaking) {
-      if (sourceRef.current) try { sourceRef.current.stop(); } catch(e) {}
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
-      setIsSpeaking(false);
+      stopAudio();
       return;
     }
 
     setIsAudioLoading(true);
     try {
-      const base64Audio = await generateAiSpeech(displayChatText);
-      if (base64Audio) {
-        const binaryString = atob(base64Audio);
+      const audioResult = await generateAiSpeech(displayChatText);
+      
+      if (audioResult) {
+        const { data, source } = audioResult;
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        const binaryString = atob(data);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-        const int16Data = new Int16Array(bytes.buffer);
-        const float32Data = new Float32Array(int16Data.length);
-        for (let i = 0; i < int16Data.length; i++) float32Data[i] = int16Data[i] / 32768.0;
-        const buffer = ctx.createBuffer(1, float32Data.length, 24000);
-        buffer.getChannelData(0).set(float32Data);
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(ctx.destination);
-        sourceRef.current = source;
-        setIsAudioLoading(false);
-        setIsSpeaking(true);
-        source.onended = () => setIsSpeaking(false);
-        source.start();
+
+        if (source === 'elevenlabs') {
+          // ElevenLabs تعيد ملف MP3 متكامل
+          const buffer = await ctx.decodeAudioData(bytes.buffer);
+          const sourceNode = ctx.createBufferSource();
+          sourceNode.buffer = buffer;
+          sourceNode.connect(ctx.destination);
+          sourceRef.current = sourceNode;
+          setIsAudioLoading(false);
+          setIsSpeaking(true);
+          sourceNode.onended = () => setIsSpeaking(false);
+          sourceNode.start();
+        } else {
+          // Gemini تعيد بيانات PCM Int16
+          const int16Data = new Int16Array(bytes.buffer);
+          const float32Data = new Float32Array(int16Data.length);
+          for (let i = 0; i < int16Data.length; i++) float32Data[i] = int16Data[i] / 32768.0;
+          const buffer = ctx.createBuffer(1, float32Data.length, 24000);
+          buffer.getChannelData(0).set(float32Data);
+          const sourceNode = ctx.createBufferSource();
+          sourceNode.buffer = buffer;
+          sourceNode.connect(ctx.destination);
+          sourceRef.current = sourceNode;
+          setIsAudioLoading(false);
+          setIsSpeaking(true);
+          sourceNode.onended = () => setIsSpeaking(false);
+          sourceNode.start();
+        }
       } else {
         setIsAudioLoading(false);
         setIsSpeaking(true);
         await streamSpeech(displayChatText, () => setIsSpeaking(false));
       }
     } catch (error) {
+      console.error("Speech handling error:", error);
       setIsAudioLoading(false);
       setIsSpeaking(true);
       await streamSpeech(displayChatText, () => setIsSpeaking(false));
