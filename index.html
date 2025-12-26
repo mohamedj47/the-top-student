@@ -18,7 +18,6 @@
       .font-sans { font-family: 'Cairo', sans-serif; }
       .scrollbar-hide::-webkit-scrollbar { display: none; }
       
-      /* تحسين عرض الجداول في المتصفح */
       .markdown-body table { 
         border-collapse: collapse; 
         width: 100%; 
@@ -45,15 +44,15 @@
   <script type="importmap">
 {
   "imports": {
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
     "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
     "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
     "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
     "remark-gfm": "https://esm.sh/remark-gfm@^4.0.1",
-    "vite": "https://esm.sh/vite@^7.3.0"
+    "vite": "https://esm.sh/vite@^7.3.0",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
 }
 </script>
@@ -66,17 +65,9 @@
         </div>
     </div>
     
-    <!-- استخدام المسار المباشر لملف index.tsx لضمان تعرف Rollup عليه في Vercel -->
-    <script type="module" src="index.tsx"></script>
+    <!-- تم تغيير المسار إلى مسار مطلق لضمان وصول Vite إليه في بيئة Vercel -->
+    <script type="module" src="/index.tsx"></script>
     
-    <!-- مكتبة الرسوم البيانية -->
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>
-      window.addEventListener('load', () => {
-        if (window.mermaid) {
-          mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose' });
-        }
-      });
-    </script>
   </body>
 </html>
