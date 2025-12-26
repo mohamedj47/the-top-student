@@ -4,17 +4,12 @@ import { questionsBank, localContentRepository } from "../lib/questionsBank";
 import { DynamicQuestionBank } from "../lib/dynamicBank";
 import { getApiKey, rotateApiKey, ensureApiKey } from "../utils/apiKeyManager";
 
-/**
- * وظيفة تنظيف النصوص من علامات الرياضات المعقدة
- */
+// تصدير الوظائف الأساسية في البداية لضمان توفرها
 export function cleanMathNotation(text: string): string {
   if (!text) return "";
   return text.replace(/\$/g, '');
 }
 
-/**
- * تجهيز النص للنطق الصوتي
- */
 export function sanitizeForSpeech(text: string): string {
   if (!text) return "";
   return text.replace(/\$/g, '').replace(/\|/g, ' ').replace(/\*/g, '').replace(/#/g, '').replace(/-+/g, ' ').replace(/\n+/g, ' . ').trim();
@@ -26,12 +21,106 @@ const SYSTEM_INSTRUCTION = `
 
 - القاعدة الذهبية (إجبارية في كل رد):
   1. **الشرح النصي**: في جداول Markdown منظمة.
-  2. **الوصف البصري**: تشبيه حياتي إبداعي.
-  3. **الرسم البياني (Mermaid)**: كود 'graph TD' بسيط.
+  2. **الوصف البصري**: تشبيه حياتي إبداعي أو كود HTML منسق.
+  3. **الرسم البياني (Mermaid)**: كود 'graph TD' فائق البساطة.
 
-يمنع استخدام علامات ($).
-ابدأ بكلمة "تمام".
+- **تحذير أمني برمجيا**: يمنع منعاً باتاً استخدام علامة الدولار ($) أو رموز LaTeX المعقدة. اكتب المعادلات كمتن نصي عادي أو داخل جداول.
+- ابدأ دائماً بكلمة "تمام" لتأكيد الالتزام بالبروتوكول.
 `;
+
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+const ELEVENLABS_VOICE_ID = "pNInz6obpgnuMGrWAt7r"; 
+
+async function generateElevenLabsSpeech(text: string): Promise<string | null> {
+  if (!ELEVENLABS_API_KEY || ELEVENLABS_API_KEY.includes('YOUR_KEY')) return null;
+  try {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "xi-api-key": ELEVENLABS_API_KEY,
+      },
+      body: JSON.stringify({
+        text,
+        model_id: "eleven_multilingual_v2",
+        voice_settings: { stability: 0.5, similarity_boost: 0.5 },
+      }),
+    });
+    if (!response.ok) return null;
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  } catch (error) {
+    console.error("ElevenLabs Error:", error);
+    return null;
+  }
+}
+
+const EXTENDED_LOCAL_CONTENT = [
+  ...localContentRepository,
+  {
+    topic: "Unit 1: Health and Safety",
+    subject: Subject.ENGLISH,
+    grade: GradeLevel.GRADE_11,
+    explanation: `### تمام، إليك شرح درس Unit 1: Health and Safety (First Aid) 🩺
+في هذا الدرس نتعلم كيف نتصرف في حالات الطوارئ الطبية وأهمية الإسعافات الأولية.
+
+| المصطلح (Word) | المعنى بالعربي | التعريف (Definition) |
+| :--- | :--- | :--- |
+| **First Aid** | الإسعافات الأولية | Basic medical help given to an injured person. |
+| **CPR** | الإنعاش القلبي | Cardio-Pulmonary Resuscitation. |
+
+---
+**القواعد (Grammar): الضرورة والالتزام (Must / Have to)**
+1. **Must**: للالتزام القوي النابع من الداخلي أو القواعد العامة.
+2. **Mustn't**: للتحريم والمنع.
+
+---
+**الوصف البصري 🎨:**
+تخيل الإسعافات الأولية زي "درع الحماية" اللي بنستخدمه أول ما حد يتصاب.`,
+    summary: `### ملخص Unit 1
+- الإسعافات الأولية ضرورية لإنقاذ الأرواح.
+- نستخدم Must للضرورة و Mustn't للمنع والتحريم.`,
+    practice: `### أسئلة تدريبية على Unit 1
+1. Choose: You (must / mustn't) use clean bandages on a wound.`,
+    keyPoints: "| النقطة | التفاصيل |\n| :--- | :--- |\n| Vocabulary | Focus on Medical verbs |"
+  }
+];
+
+function findLocalContent(query: string, subject: Subject): string | null {
+  const normalizedQuery = query.toLowerCase();
+  const entry = EXTENDED_LOCAL_CONTENT.find(e => 
+    normalizedQuery.includes(e.topic.toLowerCase()) || 
+    e.topic.toLowerCase().includes(normalizedQuery.replace(/(اشرح|لي|درس|بالتفصيل|وبالأمثلة|unit 1|unit1)/g, '').trim())
+  );
+
+  if (!entry) return null;
+
+  let result = entry.explanation;
+  if (normalizedQuery.includes('لخص') || normalizedQuery.includes('ملخص')) {
+    result = entry.summary;
+  } else if (normalizedQuery.includes('أسئلة') || normalizedQuery.includes('تدريب')) {
+    result = entry.practice;
+  } else if (normalizedQuery.includes('نقاط') || normalizedQuery.includes('توقعات')) {
+    result = entry.keyPoints;
+  }
+  
+  return cleanMathNotation(result);
+}
+
+export function searchInStaticBank(query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+  const match = questionsBank.find(q => 
+    normalizedQuery.includes(q.question.toLowerCase()) || 
+    q.question.toLowerCase().includes(normalizedQuery)
+  );
+  if (match) return { ...match, answer: cleanMathNotation(match.answer) };
+  return null;
+}
 
 async function executeWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
   try { return await fn(); } catch (error: any) {
@@ -44,6 +133,8 @@ async function executeWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 20
 }
 
 export async function generateAiSpeech(text: string): Promise<{data: string, source: 'gemini' | 'elevenlabs'} | null> {
+  const elevenAudio = await generateElevenLabsSpeech(text);
+  if (elevenAudio) return { data: elevenAudio, source: 'elevenlabs' };
   try {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const response = await executeWithRetry(async () => {
@@ -71,16 +162,6 @@ export async function streamSpeech(text: string, onComplete?: () => void): Promi
   window.speechSynthesis.speak(utterance);
 }
 
-export function searchInStaticBank(query: string) {
-  const normalizedQuery = query.trim().toLowerCase();
-  const match = questionsBank.find(q => 
-    normalizedQuery.includes(q.question.toLowerCase()) || 
-    q.question.toLowerCase().includes(normalizedQuery)
-  );
-  if (match) return { ...match, answer: cleanMathNotation(match.answer) };
-  return null;
-}
-
 let requestQueue: Promise<any> = Promise.resolve();
 
 export async function generateStreamResponse(
@@ -94,16 +175,35 @@ export async function generateStreamResponse(
   deviceId?: string
 ): Promise<string> {
   
+  const localContent = findLocalContent(userMessage, subject);
+  if (localContent) {
+    onChunk(localContent);
+    return localContent;
+  }
+
   const staticMatch = searchInStaticBank(userMessage);
   if (staticMatch) {
     onChunk(staticMatch.answer);
     return staticMatch.answer;
   }
 
+  const cachedMatch = await DynamicQuestionBank.search(userMessage, subject);
+  if (cachedMatch) {
+    const cleanAnswer = cleanMathNotation(cachedMatch.answer);
+    onChunk(cleanAnswer);
+    return cleanAnswer;
+  }
+
   const task = () => executeWithRetry(async () => {
     await ensureApiKey();
     const apiKey = getApiKey();
+    
+    if (!apiKey || apiKey === "") {
+        throw new Error("API_KEY_MISSING");
+    }
+
     const ai = new GoogleGenAI({ apiKey });
+    const modelName = 'gemini-3-flash-preview';
     
     const contents = history.slice(-6).map(msg => ({
       role: msg.sender === Sender.USER ? 'user' : 'model' as any,
@@ -117,7 +217,7 @@ export async function generateStreamResponse(
     contents.push({ role: "user", parts: currentParts });
 
     const streamResponse = await ai.models.generateContentStream({
-      model: 'gemini-3-flash-preview',
+      model: modelName,
       contents,
       config: { 
         systemInstruction: SYSTEM_INSTRUCTION, 
@@ -137,8 +237,13 @@ export async function generateStreamResponse(
     }
     return finalCleanText;
   }).catch(error => {
-    rotateApiKey();
-    const errorMsg = "عذراً، المحرك مشغول حالياً، جاري التبديل لمفتاح بديل. أعد المحاولة ثانية.";
+    console.error("Gemini API Error:", error);
+    let errorMsg = "عذراً، لم أجد إجابة جاهزة حالياً. تأكد من وجود مفتاح الـ API في الإعدادات وسأجيبك فوراً.";
+    if (error.message === "API_KEY_MISSING" || error.message?.includes("API_KEY")) {
+        errorMsg = "⚠️ **تنبيه**: عقل المعلم الذكي غير متصل. يرجى التأكد من إضافة مفتاح Gemini API في ملف vite.config.ts لتتمكن من طرح أسئلة جديدة.";
+    } else {
+        rotateApiKey();
+    }
     onChunk(errorMsg);
     return errorMsg;
   });
