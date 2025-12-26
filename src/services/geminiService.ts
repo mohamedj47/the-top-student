@@ -6,14 +6,15 @@ import { getApiKey, rotateApiKey, ensureApiKey } from "../utils/apiKeyManager";
 
 /**
  * وظيفة تنظيف النصوص من علامات الرياضات المعقدة
- * تم وضعها في البداية لضمان تصديرها بشكل صحيح لملف MessageBubble
  */
 export function cleanMathNotation(text: string): string {
   if (!text) return "";
-  // حذف علامات الدولار التي تسبب مشاكل في العرض
   return text.replace(/\$/g, '');
 }
 
+/**
+ * تجهيز النص للنطق الصوتي
+ */
 export function sanitizeForSpeech(text: string): string {
   if (!text) return "";
   return text.replace(/\$/g, '').replace(/\|/g, ' ').replace(/\*/g, '').replace(/#/g, '').replace(/-+/g, ' ').replace(/\n+/g, ' . ').trim();
