@@ -1,6 +1,6 @@
 {
-  "name": "The top student in high school",
-  "description": "An intelligent, specialized tutoring system for Egyptian high school students utilizing Gemini 2.5 Flash for fast, targeted educational assistance.",
+  "name": "The Top Student ",
+  "description": "نظام تعليمي ذكي متخصص لطلاب الثانوية العامة المصرية، يقدم شروحاً فورية وتفاعلية مدعومة بالذكاء الاصطناعي.",
   "requestFramePermissions": [
     "camera",
     "microphone"
