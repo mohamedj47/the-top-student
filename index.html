@@ -48,8 +48,8 @@
         </div>
     </div>
     
-    <!-- تم تصحيح المسار ليعمل مع Vite بشكل سليم -->
-    <script type="module" src="/index.tsx"></script>
+    <!-- تم تصحيح المسار ليكون مساراً نسبياً ./ وهو الحل الجذري لخطأ Vercel -->
+    <script type="module" src="./index.tsx"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
   </body>
 </html>
