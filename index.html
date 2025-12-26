@@ -7,24 +7,24 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- خط IBM Plex Sans Arabic: يتميز بالأناقة الشديدة والمظهر الإنساني الاحترافي -->
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- تم اختيار خط Alexandria لجماله الفائق ووضوحه التام الذي يناسب الطلاب ويمنح واجهة عصرية غير آلية -->
+    <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
       :root {
-        --font-main: 'IBM Plex Sans Arabic', sans-serif;
+        --font-main: 'Alexandria', sans-serif;
       }
       body {
         font-family: var(--font-main);
         background-color: #f8fafc;
         margin: 0;
         -webkit-tap-highlight-color: transparent;
-        line-height: 1.8;
+        line-height: 1.7;
         color: #1e293b;
       }
-      .font-sans { font-family: var(--font-main); }
+      .font-sans { font-family: var(--font-main) !important; }
       .scrollbar-hide::-webkit-scrollbar { display: none; }
       
-      /* تنسيق الجداول لتكون متناسقة مع الخط الفخم */
+      /* تنسيق الجداول لتكون فائقة الوضوح مع الخط الجديد */
       .markdown-body table { 
         border-collapse: separate;
         border-spacing: 0;
@@ -36,9 +36,9 @@
         font-size: 0.95rem;
       }
       .markdown-body th { 
-        background-color: #f8fafc; 
+        background-color: #f1f5f9; 
         padding: 14px; 
-        font-weight: 700;
+        font-weight: 800;
         color: #0f172a;
         border-bottom: 2px solid #e2e8f0;
         text-align: right; 
@@ -47,17 +47,16 @@
         padding: 12px 14px; 
         border-bottom: 1px solid #f1f5f9;
         text-align: right; 
-        color: #475569;
+        color: #334155;
       }
       
-      /* العناوين بلمسة احترافية */
+      /* تحسين مظهر العناوين */
       .markdown-body h1, .markdown-body h2, .markdown-body h3 {
         font-family: var(--font-main);
         color: #1e1b4b;
-        font-weight: 700;
+        font-weight: 800;
         margin-top: 1.8rem;
         margin-bottom: 1rem;
-        letter-spacing: -0.01em;
       }
 
       @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -90,12 +89,12 @@
     <div id="root">
         <div style="height: 100vh; width: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #f8fafc;">
             <div class="loading-spinner"></div>
-            <h2 style="margin-top: 20px; color: #475569; font-weight: 600; font-family: 'IBM+Plex+Sans+Arabic';">جاري تحميل المعلم الذكي...</h2>
+            <h2 style="margin-top: 20px; color: #475569; font-weight: 700; font-family: 'Alexandria';">جاري تحميل المعلم الذكي...</h2>
         </div>
     </div>
     
-    <!-- تم تصحيح المسار ليكون مباشراً بدون شرطة مائلة لضمان عمل نظام البناء -->
-    <script type="module" src="index.tsx"></script>
+    <!-- تم إزالة importmap لتجنب أخطاء البناء وتصحيح المسار ليعمل مع Vite/Vercel -->
+    <script type="module" src="/index.tsx"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <script>
       window.addEventListener('load', () => {
@@ -104,7 +103,7 @@
             startOnLoad: false, 
             theme: 'neutral', 
             securityLevel: 'loose',
-            fontFamily: 'IBM Plex Sans Arabic' 
+            fontFamily: 'Alexandria' 
           });
         }
       });
