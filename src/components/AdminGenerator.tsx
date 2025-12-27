@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { ShieldCheck, Copy, RefreshCw, Lock, Home, Smartphone, AlertCircle, Layers } from 'lucide-react';
+import { ShieldCheck, Copy, RefreshCw, Lock, Home, Smartphone, AlertCircle, Layers, BadgePercent, CheckCircle } from 'lucide-react';
 import { generateValidCode } from '../utils/subscriptionManager';
 import { GradeLevel } from '../types';
 
@@ -22,8 +22,11 @@ export const AdminGenerator: React.FC = () => {
     }
   };
 
-  const generateCode = () => {
-    if (!studentDeviceId.trim() || !selectedGrade) return;
+  const handleGenerate = () => {
+    if (!studentDeviceId.trim()) {
+      alert("يرجى إدخال Device ID الخاص بالطالب أولاً");
+      return;
+    }
     const code = generateValidCode(studentDeviceId.trim(), selectedGrade);
     setGeneratedCode(code);
   };
@@ -65,58 +68,65 @@ export const AdminGenerator: React.FC = () => {
            <button onClick={() => setIsAuthenticated(false)} className="text-xs font-bold hover:text-white bg-slate-700 px-3 py-1 rounded-lg">خروج</button>
         </div>
 
-        <div className="bg-slate-800 rounded-[2.5rem] shadow-2xl border border-slate-700 p-10 space-y-8">
-          <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-start gap-3">
-             <AlertCircle className="text-amber-500 shrink-0 mt-1" size={18} />
-             <p className="text-xs text-amber-200 leading-relaxed font-bold">
-               تذكير: الكود المولد هنا سيعمل فقط للجهاز المحدد وللصف المحدد ولمدة 30 يوماً فقط.
-             </p>
-          </div>
-
-          <div className="space-y-6">
-            <div className="space-y-3">
+        <div className="bg-slate-800 rounded-[2.5rem] shadow-2xl border border-slate-700 p-8 space-y-6">
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
               <label className="text-sm font-bold text-slate-400 flex items-center gap-2">
                 <Layers size={16} /> اختر الصف المراد تفعيله:
               </label>
               <select 
                 value={selectedGrade}
                 onChange={(e) => setSelectedGrade(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-indigo-500"
+                className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-indigo-500 appearance-none"
               >
                 <option value={GradeLevel.GRADE_10}>{GradeLevel.GRADE_10}</option>
                 <option value={GradeLevel.GRADE_11}>{GradeLevel.GRADE_11}</option>
                 <option value={GradeLevel.GRADE_12}>{GradeLevel.GRADE_12}</option>
               </select>
+              
+              <div className="bg-indigo-600/10 border border-indigo-500/20 p-4 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <BadgePercent className="text-indigo-400" size={20} />
+                  <span className="text-sm font-bold text-indigo-100">السعر بعد خصم 70%:</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-slate-400 text-xs line-through block">300 جنيه</span>
+                  <span className="text-xl font-black text-white">90 جنيه / 30 يوم</span>
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               <label className="text-sm font-bold text-slate-400 flex items-center gap-2">
-                <Smartphone size={16} /> رقم جهاز الطالب (STD-XXXX):
+                <Smartphone size={16} /> رقم جهاز الطالب (Device ID):
               </label>
               <input 
                   type="text" 
                   value={studentDeviceId}
-                  onChange={(e) => setStudentDeviceId(e.target.value)}
-                  placeholder="STD-00000000"
-                  className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none font-mono text-center text-xl tracking-wider"
+                  onChange={(e) => setStudentDeviceId(e.target.value.toUpperCase())}
+                  placeholder="STD-XXXXXXXX"
+                  className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none font-mono text-center text-xl tracking-wider"
                   dir="ltr"
               />
             </div>
 
             <button 
-              onClick={generateCode}
-              disabled={!studentDeviceId.trim()}
-              className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black py-5 rounded-2xl transition-all shadow-xl shadow-emerald-900/20 flex items-center justify-center gap-2 active:scale-95"
+              onClick={handleGenerate}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-5 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-2 active:scale-95"
             >
               <RefreshCw size={20} />
               توليد كود التفعيل (30 يوم)
             </button>
 
             {generatedCode && (
-              <div className="bg-black/40 p-8 rounded-3xl border border-emerald-500/30 text-center space-y-4 animate-in fade-in slide-in-from-top-4">
-                <p className="text-xs text-emerald-400 font-black uppercase tracking-widest">تم التوليد بنجاح!</p>
-                <div className="bg-slate-900 p-5 rounded-2xl border-2 border-emerald-500/20">
-                  <code className="text-3xl font-black text-white tracking-[0.1em]">{generatedCode}</code>
+              <div className="bg-emerald-500/10 p-6 rounded-3xl border border-emerald-500/30 text-center space-y-4 animate-in fade-in slide-in-from-top-4">
+                <div className="flex items-center justify-center gap-2 text-emerald-400 mb-2">
+                  <CheckCircle size={18} />
+                  <p className="text-xs font-black uppercase tracking-widest">تم التوليد بنجاح!</p>
+                </div>
+                <div className="bg-black/40 p-5 rounded-2xl border-2 border-emerald-500/20">
+                  <code className="text-2xl font-black text-white tracking-[0.1em]">{generatedCode}</code>
                 </div>
                 <button 
                   onClick={() => {
@@ -126,7 +136,7 @@ export const AdminGenerator: React.FC = () => {
                   className="w-full bg-white text-slate-900 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-black transition-all hover:bg-slate-100"
                 >
                   <Copy size={18} />
-                  نسخ وإرسال للطالب
+                  نسخ الكود وإرساله للطالب
                 </button>
               </div>
             )}
