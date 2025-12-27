@@ -6,28 +6,32 @@ import { ChatInterface } from './components/ChatInterface';
 import { SubscriptionModal } from './components/SubscriptionModal';
 import { AdminGenerator } from './components/AdminGenerator';
 import { TutorialModal } from './components/TutorialModal';
-// Added CheckCircle and Lock to fix missing component and global type conflict errors
-import { GraduationCap, School, Printer, LockKeyhole, Clock, AlertTriangle, HelpCircle, BadgePercent, Sparkles, CheckCircle, Lock } from 'lucide-react';
+import { GraduationCap, School, LockKeyhole, Clock, AlertTriangle, CheckCircle, Lock } from 'lucide-react';
 import { ensureApiKey } from './utils/apiKeyManager';
 import { checkSubscriptionStatus } from './utils/subscriptionManager';
 
 const App: React.FC = () => {
   const [grade, setGrade] = useState<GradeLevel | null>(null);
   const [subject, setSubject] = useState<Subject | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  // تحسين: التحقق من الهاش مباشرة عند بداية التشغيل
+  const [isAdmin, setIsAdmin] = useState(typeof window !== 'undefined' && window.location.hash === '#admin');
   const [isManualSubscriptionOpen, setIsManualSubscriptionOpen] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [subscriptionInfo, setSubscriptionInfo] = useState({ isSubscribed: false, daysLeft: 0 });
 
   useEffect(() => {
     ensureApiKey();
-    const checkHash = () => setIsAdmin(window.location.hash === '#admin');
-    checkHash();
-    window.addEventListener('hashchange', checkHash);
-    return () => window.removeEventListener('hashchange', checkHash);
+    
+    // مستمع دقيق لتغيرات الهاش لضمان الدخول للوحة الإدارة في أي وقت
+    const handleHashChange = () => {
+      setIsAdmin(window.location.hash === '#admin');
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // تحديث حالة الاشتراك عند اختيار صف
+  // تحديث حالة الاشتراك عند اختيار صف أو عند نجاح التفعيل
   useEffect(() => {
     if (grade) {
       setSubscriptionInfo(checkSubscriptionStatus(grade));
@@ -39,7 +43,6 @@ const App: React.FC = () => {
   };
 
   const handleSubjectSelect = (selectedSubject: Subject) => {
-    // منع الدخول للمادة إذا لم يكن هناك اشتراك مفعل
     if (!subscriptionInfo.isSubscribed) {
       setIsManualSubscriptionOpen(true);
       return;
@@ -47,6 +50,7 @@ const App: React.FC = () => {
     setSubject(selectedSubject);
   };
 
+  // أولوية العرض للوحة الإدارة إذا كان الهاش موجوداً
   if (isAdmin) return <AdminGenerator />;
 
   return (
@@ -62,7 +66,7 @@ const App: React.FC = () => {
         onClose={() => setIsTutorialOpen(false)}
       />
 
-      {/* الشريط العلوي للاشتراك */}
+      {/* تنبيه حالة الاشتراك */}
       {grade && !subscriptionInfo.isSubscribed && (
         <div className="fixed top-0 left-0 w-full z-[100] bg-red-600 text-white p-2 text-center text-xs font-black animate-pulse flex items-center justify-center gap-3">
           <AlertTriangle size={14} />
@@ -74,7 +78,7 @@ const App: React.FC = () => {
       {grade && subscriptionInfo.isSubscribed && subscriptionInfo.daysLeft <= 3 && (
         <div className="fixed top-0 left-0 w-full z-[100] bg-amber-500 text-white p-2 text-center text-xs font-black flex items-center justify-center gap-3">
           <Clock size={14} />
-          <span>تنبيه: متبقي {subscriptionInfo.daysLeft} أيام على انتهاء اشتراكك في {grade}.</span>
+          <span>تنبيه: متبقي {subscriptionInfo.daysLeft} أيام على انتهاء اشتراكك.</span>
         </div>
       )}
 
@@ -167,7 +171,9 @@ const App: React.FC = () => {
             </div>
 
             <div className="bg-slate-50 p-6 text-center border-t border-slate-100">
-               <button onClick={() => window.location.hash = '#admin'} className="text-slate-300 hover:text-indigo-400 p-2"><LockKeyhole size={18} /></button>
+               <button onClick={() => window.location.hash = '#admin'} className="text-slate-300 hover:text-indigo-400 p-2 transition-colors">
+                 <LockKeyhole size={18} />
+               </button>
             </div>
           </div>
         </div>
