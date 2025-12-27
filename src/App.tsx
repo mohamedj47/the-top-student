@@ -13,8 +13,11 @@ import { checkSubscriptionStatus } from './utils/subscriptionManager';
 const App: React.FC = () => {
   const [grade, setGrade] = useState<GradeLevel | null>(null);
   const [subject, setSubject] = useState<Subject | null>(null);
-  // تحسين: التحقق من الهاش مباشرة عند بداية التشغيل
-  const [isAdmin, setIsAdmin] = useState(typeof window !== 'undefined' && window.location.hash === '#admin');
+  
+  // تحديث: جعل التحقق أكثر مرونة ليقبل #admin في أي مكان داخل الهاش
+  const checkIsAdmin = () => typeof window !== 'undefined' && window.location.hash.includes('#admin');
+  
+  const [isAdmin, setIsAdmin] = useState(checkIsAdmin());
   const [isManualSubscriptionOpen, setIsManualSubscriptionOpen] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [subscriptionInfo, setSubscriptionInfo] = useState({ isSubscribed: false, daysLeft: 0 });
@@ -24,14 +27,17 @@ const App: React.FC = () => {
     
     // مستمع دقيق لتغيرات الهاش لضمان الدخول للوحة الإدارة في أي وقت
     const handleHashChange = () => {
-      setIsAdmin(window.location.hash === '#admin');
+      setIsAdmin(checkIsAdmin());
     };
 
     window.addEventListener('hashchange', handleHashChange);
+    // التحقق مرة أخرى عند التحميل الأولي لضمان عدم ضياع الحالة
+    handleHashChange();
+    
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // تحديث حالة الاشتراك عند اختيار صف أو عند نجاح التفعيل
+  // تحديث حالة الاشتراك عند اختيار صف أو عند فتح مودال الاشتراك
   useEffect(() => {
     if (grade) {
       setSubscriptionInfo(checkSubscriptionStatus(grade));
@@ -50,7 +56,7 @@ const App: React.FC = () => {
     setSubject(selectedSubject);
   };
 
-  // أولوية العرض للوحة الإدارة إذا كان الهاش موجوداً
+  // أولوية العرض المطلقة للوحة الإدارة (Admin Generator)
   if (isAdmin) return <AdminGenerator />;
 
   return (
@@ -171,7 +177,11 @@ const App: React.FC = () => {
             </div>
 
             <div className="bg-slate-50 p-6 text-center border-t border-slate-100">
-               <button onClick={() => window.location.hash = '#admin'} className="text-slate-300 hover:text-indigo-400 p-2 transition-colors">
+               <button onClick={() => {
+                 window.location.hash = '#admin';
+                 // إجبار التحديث في حال لم يستجب المتصفح للهاش
+                 setIsAdmin(true);
+               }} className="text-slate-300 hover:text-indigo-400 p-2 transition-colors">
                  <LockKeyhole size={18} />
                </button>
             </div>
