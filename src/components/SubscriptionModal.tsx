@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Lock, Clock, CheckCircle, Send, AlertTriangle, Copy, X, Smartphone, ShieldCheck } from 'lucide-react';
+import { Lock, Clock, CheckCircle, Send, AlertTriangle, Copy, X, Smartphone, ShieldCheck, BadgePercent } from 'lucide-react';
 import { GradeLevel } from '../types';
 import { getStableDeviceId, activateGrade } from '../utils/subscriptionManager';
 
@@ -73,7 +73,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
            <p className="text-slate-500 text-sm mt-2 font-medium">نظام اشتراك فردي - صالح لمدة 30 يوماً لهذا الجهاز</p>
         </div>
 
-        <div className="p-8 space-y-6">
+        <div className="p-8 space-y-5">
            <div className="space-y-2">
                <label className="text-sm font-black text-slate-700 flex items-center gap-2">
                  <div className="w-5 h-5 bg-indigo-100 rounded text-indigo-600 flex items-center justify-center text-[10px]">1</div>
@@ -82,13 +82,24 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
                <select 
                   value={selectedGrade} 
                   onChange={(e) => setSelectedGrade(e.target.value)}
-                  className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl font-bold text-slate-700 focus:border-indigo-500 focus:ring-0 transition-all"
+                  className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl font-bold text-slate-700 focus:border-indigo-500 focus:ring-0 transition-all appearance-none"
                >
                    <option value="">-- اختر الصف الدراسي --</option>
                    <option value={GradeLevel.GRADE_10}>{GradeLevel.GRADE_10}</option>
                    <option value={GradeLevel.GRADE_11}>{GradeLevel.GRADE_11}</option>
                    <option value={GradeLevel.GRADE_12}>{GradeLevel.GRADE_12}</option>
                </select>
+
+               <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BadgePercent className="text-amber-600" size={20} />
+                    <span className="text-xs font-black text-amber-800">عرض خاص (خصم 70%):</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-slate-400 text-[10px] line-through block">300 جنيه</span>
+                    <span className="text-lg font-black text-amber-700">90 ج.م / 30 يوم</span>
+                  </div>
+               </div>
            </div>
 
            <div className="space-y-2">
@@ -110,18 +121,18 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
                </div>
            </div>
 
-           <div className="pt-4 space-y-4">
+           <div className="pt-2 space-y-4">
               <button 
                 onClick={handleWhatsAppClick}
                 className="w-full bg-[#25D366] hover:bg-[#1eb956] text-white font-black py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-3 active:scale-95"
               >
                 <Send size={20} />
-                <span>طلب كود التفعيل (30 يوم)</span>
+                <span>طلب كود التفعيل (90 جنيه)</span>
               </button>
 
-              <div className="relative flex items-center py-2">
+              <div className="relative flex items-center py-1">
                 <div className="flex-grow border-t border-slate-100"></div>
-                <span className="flex-shrink mx-4 text-slate-400 text-[10px] font-bold uppercase tracking-widest">لديك كود؟ أدخله هنا</span>
+                <span className="flex-shrink mx-4 text-slate-400 text-[9px] font-bold uppercase tracking-widest">لديك كود؟ أدخله هنا</span>
                 <div className="flex-grow border-t border-slate-100"></div>
               </div>
 
@@ -129,7 +140,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
                  <input 
                    type="text" 
                    value={inputCode}
-                   onChange={(e) => setInputCode(e.target.value)}
+                   onChange={(e) => setInputCode(e.target.value.toUpperCase())}
                    className="block w-full px-6 py-4 border-2 border-slate-200 rounded-2xl text-center font-mono text-xl uppercase tracking-[0.2em] focus:border-indigo-500 focus:bg-indigo-50/30 transition-all"
                    placeholder="XXXX-XXXX-XXXX"
                  />
