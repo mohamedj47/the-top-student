@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
     /**
      * ⚠️ إدارة مفاتيح الـ API:
      * 1. API_KEY: مفتاح Gemini (من Google AI Studio) - العقل المدبر.
-     * 2. ELEVENLABS_API_KEY: مفتاح ElevenLabs - الصوت البشري الطبيعي.
+     * 2. ELEVENLABS_API_KEY: مفتاح ElevenLabs - الصوت البشري الطبيعي. 
      */
     define: {
       // مفاتيح Gemini (تأكد من وضع مفتاحك هنا إذا لم يعمل التلقائي)
