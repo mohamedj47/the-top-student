@@ -40,13 +40,24 @@ export async function decodePcmAudio(
   return buffer;
 }
 
+/**
+ * تنظيف النص للصوت: إزالة LaTeX والرموز الرياضية والماركداون تماماً
+ */
 export function sanitizeForSpeech(text: string): string {
   if (!text) return "";
   return text
+    // إزالة رموز LaTeX والماركداون الشائعة
+    .replace(/\\\[|\\\]|\\\(|\\\)/g, ' ')
+    .replace(/\$+/g, ' ')
+    .replace(/\*+/g, ' ')
+    .replace(/#+/g, ' ')
+    .replace(/_+/g, ' ')
     .replace(/\|/g, ' . ')
     .replace(/-{3,}/g, ' ')
-    .replace(/[^\u0600-\u06FFa-zA-Z0-9\s]/g, ' ')
-    .replace(/^\s*[\d•.-]+\s+/gm, ' ومن النقاط الهامة أيضاً ')
+    // إزالة الرموز الرياضية التي قد تربك القارئ الآلي
+    .replace(/[><=\^\/\{\}\[\]]/g, ' ')
+    // تحويل القوائم إلى فواصل منطقية
+    .replace(/^\s*[\d•.-]+\s+/gm, ' . ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -62,30 +73,16 @@ export async function evaluateStudentLevel(
   history: Message[],
   subject: Subject
 ): Promise<PerformanceMetrics | null> {
+  if (!navigator.onLine) return null;
   try {
     await ensureApiKey();
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
-    
     const chatLog = history.map(m => `${m.sender === Sender.USER ? 'الطالب' : 'المعلم'}: ${m.text}`).join('\n');
-
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: [{
         parts: [{
-          text: `بصفتك خبير تقييم أكاديمي لنظام الثانوية العامة المصري، حلل سجل الحوار التالي لمادة ${subject} وقيم مستوى الطالب بدقة.
-          
-          سجل الحوار:
-          ${chatLog}
-
-          يجب أن تكون النتيجة بتنسيق JSON حصراً يحتوي على الحقول التالية:
-          - accuracy: درجة الدقة العلمية للطالب (0-100)
-          - comprehension: درجة الفهم العام (0-100)
-          - analyticalSkills: مهارات التحليل والاستنتاج (0-100)
-          - consistency: مدي استمرار وتفاعل الطالب (0-100)
-          - overallLevel: وصف مختصر للمستوى (مثلاً: "متميز مع حاجة للتدريب على المسائل المركبة")
-          - recommendations: مصفوفة من 3 نصائح تعليمية مخصصة
-          - weakPoints: مصفوفة بنقاط الضعف التي ظهرت
-          - strongPoints: مصفوفة بنقاط القوة التي ظهرت`
+          text: `حلل سجل الحوار التالي لمادة ${subject} وقيم مستوى الطالب بتنسيق JSON: ${chatLog}`
         }]
       }],
       config: {
@@ -102,24 +99,24 @@ export async function evaluateStudentLevel(
             weakPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
             strongPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
           },
-          required: ["accuracy", "comprehension", "analyticalSkills", "overallLevel", "recommendations"]
+          required: ["accuracy", "overallLevel", "recommendations"]
         }
       }
     });
-
     return JSON.parse(response.text || "null");
-  } catch (error) {
-    console.error("Evaluation error:", error);
-    return null;
-  }
+  } catch (error) { return null; }
 }
 
+/**
+ * استخدام Web Speech API المحلي حصراً لضمان العمل أوفلاين
+ */
 export async function streamSpeech(text: string, onComplete?: () => void): Promise<void> {
   if (!window.speechSynthesis) { onComplete?.(); return; }
   window.speechSynthesis.cancel();
   const cleanText = sanitizeForSpeech(text);
   const sentences = cleanText.split(/[.،]/).filter(s => s.trim().length > 2);
   let currentSentence = 0;
+  
   const speakNext = () => {
     if (currentSentence >= sentences.length) { onComplete?.(); return; }
     const utterance = new SpeechSynthesisUtterance(sentences[currentSentence]);
@@ -128,39 +125,21 @@ export async function streamSpeech(text: string, onComplete?: () => void): Promi
     utterance.voice = arabicVoice;
     utterance.lang = 'ar-SA';
     utterance.pitch = 1.0; 
-    utterance.rate = 0.85;
-    utterance.onend = () => { currentSentence++; setTimeout(speakNext, 300); };
+    utterance.rate = 0.9; // سرعة تعليمية هادئة
+    utterance.onend = () => { currentSentence++; setTimeout(speakNext, 200); };
     utterance.onerror = () => { currentSentence++; speakNext(); };
     window.speechSynthesis.speak(utterance);
   };
+
   if (sentences.length > 0) speakNext();
   else onComplete?.();
 }
 
+/**
+ * تعطيل Voice API الخارجي لضمان الخصوصية والعمل أوفلاين
+ */
 export async function generateAiSpeech(text: string): Promise<{ data: string; source: 'gemini' | 'cache' } | null> {
-  const cacheKey = AudioCache.generateKey(text);
-  const cachedAudio = await AudioCache.get(cacheKey);
-  if (cachedAudio) return { data: cachedAudio, source: 'cache' };
-  if (!navigator.onLine) return null;
-  try {
-    await ensureApiKey();
-    const ai = new GoogleGenAI({ apiKey: getApiKey() });
-    const sanitizedText = sanitizeForSpeech(text);
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `اشرحي هذا النص للطالب بأسلوب مدرسة مصرية هادئة جداً، لا تنطقي أي رموز: ${sanitizedText}` }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
-      },
-    });
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (base64Audio) {
-      await AudioCache.save(cacheKey, base64Audio);
-      return { data: base64Audio, source: 'gemini' };
-    }
-    return null;
-  } catch (error) { return null; }
+  return null; // Force fallback to streamSpeech (Web Speech API)
 }
 
 export async function generateStreamResponse(
@@ -173,15 +152,33 @@ export async function generateStreamResponse(
   options?: GenerationOptions,
   deviceId?: string
 ): Promise<string> {
+  // 1. فحص البنك الثابت أولاً (Local Priority)
   const staticMatch = searchInStaticBank(userMessage);
-  if (staticMatch) { onChunk(staticMatch.answer); return staticMatch.answer; }
-  const cachedMatch = await DynamicQuestionBank.search(userMessage, subject);
-  if (cachedMatch) { onChunk(cachedMatch.answer); return cachedMatch.answer; }
-  if (!navigator.onLine) {
-    const fallback = "أنت الآن في وضع الأوفلاين. جاري عرض أقرب شرح محفوظ لهذه المادة من الذاكرة المحلية...";
-    onChunk(fallback);
-    return fallback;
+  if (staticMatch) { 
+    onChunk(staticMatch.answer); 
+    return staticMatch.answer; 
   }
+
+  // 2. فحص البنك الديناميكي المخزن محلياً (Cache Priority)
+  const cachedMatch = await DynamicQuestionBank.search(userMessage, subject);
+  if (cachedMatch) { 
+    onChunk(cachedMatch.answer); 
+    return cachedMatch.answer; 
+  }
+
+  // 3. التحقق من الإنترنت قبل طلب الـ API
+  if (!navigator.onLine) {
+    const offlineMsg = "عذراً يا بطل، أنت الآن في وضع الأوفلاين. جاري البحث في ذاكرتي المحلية عن أقرب إجابة لموضوع سؤالك...";
+    onChunk(offlineMsg);
+    // محاولة البحث عن جزء من السؤال في الكاش
+    const partialMatch = await DynamicQuestionBank.searchPartial(userMessage, subject);
+    if (partialMatch) {
+        onChunk(`(تم العثور على شرح مشابه من سجل مذاكرتك):\n\n${partialMatch.answer}`);
+        return partialMatch.answer;
+    }
+    return offlineMsg;
+  }
+
   try {
     await ensureApiKey();
     const apiKey = getApiKey();
@@ -191,22 +188,29 @@ export async function generateStreamResponse(
       parts: [{ text: msg.text }]
     }));
     contents.push({ role: "user", parts: [{ text: userMessage }] });
+    
     const streamResponse = await ai.models.generateContentStream({
       model: 'gemini-3-flash-preview',
       contents,
       config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.7 }
     });
+
     let fullText = "";
     for await (const chunk of streamResponse) {
       fullText += (chunk.text || "");
       onChunk(cleanMathNotation(fullText));
     }
-    if (fullText.length > 5) {
+
+    // حفظ هجومي للنتيجة لضمان توفرها أوفلاين في المرة القادمة
+    if (fullText.length > 10) {
       DynamicQuestionBank.add(userMessage, fullText, subject, grade, deviceId || 'local_user');
     }
     return fullText;
   } catch (error) {
-    return "جاري محاولة استرجاع الشرح من الذاكرة المحلية بسبب ضغط على الخادم...";
+    const errorFallback = "جاري محاولة استرجاع الشرح من الذاكرة المحلية بسبب ضغط على الخادم أو مشكلة في الاتصال...";
+    onChunk(errorFallback);
+    const partial = await DynamicQuestionBank.searchPartial(userMessage, subject);
+    return partial ? partial.answer : errorFallback;
   }
 }
 
