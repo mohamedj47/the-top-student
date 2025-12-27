@@ -1,5 +1,4 @@
 
-
 export enum GradeLevel {
   GRADE_10 = 'الصف الأول الثانوي',
   GRADE_11 = 'الصف الثاني الثانوي',
@@ -44,9 +43,26 @@ export interface Message {
   timestamp: Date;
   isStreaming?: boolean;
   attachment?: Attachment;
-  // Added optional properties to support simplified explanation features and fix build errors
   simplifiedText?: string;
   visualDescription?: string;
+}
+
+export interface PerformanceMetrics {
+  accuracy: number;        // من 0 لـ 100
+  comprehension: number;   // من 0 لـ 100
+  analyticalSkills: number; // من 0 لـ 100
+  consistency: number;     // من 0 لـ 100
+  overallLevel: string;    // مبتدئ، متوسط، متقدم، عبقري
+  recommendations: string[];
+  weakPoints: string[];
+  strongPoints: string[];
+}
+
+export interface SubjectMastery {
+  subject: Subject;
+  masteryScore: number;
+  lastEvaluated: Date;
+  metrics: PerformanceMetrics;
 }
 
 export interface ChatSession {
@@ -54,7 +70,6 @@ export interface ChatSession {
   subject: Subject;
 }
 
-// Added GenerationOptions to fix build error
 export interface GenerationOptions {
   useThinking?: boolean;
   useSearch?: boolean;
