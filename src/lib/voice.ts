@@ -1,5 +1,3 @@
-// src/lib/voice.ts
-
 // ===================
 // Kore (Browser local)
 // ===================
