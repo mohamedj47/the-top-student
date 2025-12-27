@@ -1,14 +1,15 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { GradeLevel, Subject, Message, Sender, Attachment } from '../types';
-import { generateStreamResponse } from '../services/geminiService';
+import { GradeLevel, Subject, Message, Sender, Attachment, PerformanceMetrics } from '../types';
+import { generateStreamResponse, evaluateStudentLevel } from '../services/geminiService';
 import { MessageBubble } from './MessageBubble';
 import { LiveVoiceModal } from './LiveVoiceModal';
 import { LessonBrowser } from './LessonBrowser';
 import { YouTubeModal } from './YouTubeModal';
+import { PerformanceDashboard } from './PerformanceDashboard';
 import { VideoResult } from '../data/videoData';
 import { getApiKey } from '../utils/apiKeyManager';
-import { Send, Sparkles, ChevronRight, HelpCircle, FileText, Lightbulb, Bot, List, Printer, Mic, Camera, Paperclip, X, Image as ImageIcon, AudioLines, StopCircle, BrainCircuit, Globe, Youtube, PlayCircle, BadgePercent, AlertCircle } from 'lucide-react';
+import { Send, Sparkles, ChevronRight, HelpCircle, FileText, Lightbulb, Bot, List, Printer, Mic, Camera, Paperclip, X, Image as ImageIcon, AudioLines, StopCircle, BrainCircuit, Globe, Youtube, PlayCircle, BadgePercent, AlertCircle, TrendingUp, Loader2 } from 'lucide-react';
 
 interface ChatInterfaceProps {
   grade: GradeLevel;
@@ -39,6 +40,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics | null>(null);
+  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
+  
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isLiveMode, setIsLiveMode] = useState(false);
@@ -70,6 +75,28 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
   useEffect(() => {
     scrollToBottom();
   }, [messages, attachment]);
+
+  const handleMeasureLevel = async () => {
+    if (messages.length < 3) {
+      alert("من فضلك تفاعل معي قليلاً أولاً (اسأل سؤالين على الأقل) لكي أتمكن من قياس مستواك بدقة.");
+      return;
+    }
+    
+    setIsEvaluating(true);
+    try {
+      const result = await evaluateStudentLevel(messages, subject);
+      if (result) {
+        setPerformanceMetrics(result);
+        setIsDashboardOpen(true);
+      } else {
+        alert("عذراً، لم أتمكن من إتمام التحليل حالياً. حاول مرة أخرى لاحقاً.");
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsEvaluating(false);
+    }
+  };
 
   const processFile = (file: File) => {
     const reader = new FileReader();
@@ -212,6 +239,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
       <LiveVoiceModal isOpen={isLiveMode} onClose={() => setIsLiveMode(false)} grade={grade} subject={subject} />
       <LessonBrowser isOpen={isLessonBrowserOpen} onClose={() => setIsLessonBrowserOpen(false)} grade={grade} subject={subject} onPlayVideo={handlePlayVideo} onExplain={handleExplainLesson} />
       <YouTubeModal isOpen={isVideoModalOpen} onClose={() => setIsVideoModalOpen(false)} videoData={currentVideoData} lessonTitle={currentLessonTitle} />
+      
+      {isDashboardOpen && performanceMetrics && (
+        <PerformanceDashboard 
+          subject={subject} 
+          metrics={performanceMetrics} 
+          onClose={() => setIsDashboardOpen(false)} 
+        />
+      )}
 
       <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,application/pdf" />
       <input type="file" ref={cameraInputRef} onChange={handleFileSelect} className="hidden" accept="image/*" capture="environment" />
@@ -228,6 +263,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
         </div>
         
         <div className="flex items-center gap-1 md:gap-2 shrink-0">
+            <button 
+              onClick={handleMeasureLevel} 
+              disabled={isEvaluating}
+              className={`hidden sm:flex items-center gap-2 px-4 py-2 rounded-full font-black text-xs md:text-sm transition-all shadow-sm ${
+                isEvaluating ? 'bg-slate-100 text-slate-400' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100'
+              }`}
+            >
+              {isEvaluating ? <Loader2 size={16} className="animate-spin" /> : <TrendingUp size={16} />}
+              <span>{isEvaluating ? 'جاري التحليل...' : 'قياس مستواي'}</span>
+            </button>
             {apiKeyWarning && (
                 <div className="hidden lg:flex items-center gap-1.5 text-red-500 bg-red-50 px-2 py-1 rounded-lg border border-red-100 animate-pulse">
                     <AlertCircle size={14} />
@@ -246,10 +291,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
             <button onClick={handlePrint} className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all">
                <Printer size={20} className="md:w-6 md:h-6" />
             </button>
-            <div className="bg-indigo-50 px-2.5 py-1 md:px-3 md:py-1.5 rounded-full flex items-center gap-1.5 border border-indigo-100 hidden sm:flex">
-               <Sparkles size={16} className="text-indigo-600 md:w-5 md:h-5" />
-               <span className="text-xs md:text-sm font-bold text-indigo-700">معلم ذكي</span>
-            </div>
         </div>
       </header>
 
@@ -323,7 +364,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
           <button onClick={handleRecordToggle} className={`p-2.5 rounded-2xl transition-all h-[56px] md:h-[64px] w-[56px] md:w-[64px] flex items-center justify-center shrink-0 ${isRecording ? 'bg-red-500 text-white animate-pulse shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-red-100 hover:text-red-500'}`}>{isRecording ? <StopCircleIcon /> : <Mic size={24} />}</button>
           <button onClick={() => handleSend()} disabled={(!inputValue.trim() && !attachment) || isLoading || isRecording} className={`p-3 rounded-2xl flex items-center justify-center transition-all h-[56px] md:h-[64px] w-[56px] md:w-[64px] shrink-0 ${ (inputValue.trim() || attachment) && !isLoading && !isRecording ? 'bg-indigo-600 text-white shadow-md hover:bg-indigo-700' : 'bg-slate-200 text-slate-400 cursor-not-allowed' }`}><Send size={24} /></button>
         </div>
-        {isRecording && <div className="text-center text-xs text-red-500 mt-2 font-bold animate-pulse">جاري الاستماع... اضغط مرة أخرى للإيقاف</div>}
       </div>
     </div>
   );
