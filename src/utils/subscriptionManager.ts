@@ -52,6 +52,7 @@ export const getStableDeviceId = (): string => {
 /**
  * خوارزمية توليد كود التفعيل (Deterministic)
  * الكود ناتج عن دمج (معرف الجهاز + معرف الصف + الملح السري)
+ * تم الإصلاح: يدعم الآن الأحرف العربية في المدخلات عبر تشفيرها قبل استخدام btoa
  */
 export const generateValidCode = (deviceId: string, gradeId: string): string => {
   if (!deviceId || !gradeId) return "";
@@ -59,8 +60,17 @@ export const generateValidCode = (deviceId: string, gradeId: string): string => 
   const cleanId = deviceId.trim().toUpperCase();
   const combined = `${cleanId}:${gradeId}:${SALT}`;
   
-  // تشفير المعطيات لإنتاج كود مكون من 12 حرف ورقم في 3 مقاطع
-  const hash = btoa(combined).replace(/[^A-Z0-9]/g, '');
+  // FIX: btoa expects Latin1. gradeId contains Arabic (UTF-8).
+  // We must encode to UTF-8 binary string before calling btoa.
+  let hash = "";
+  try {
+    const utf8Combined = unescape(encodeURIComponent(combined));
+    hash = btoa(utf8Combined).replace(/[^A-Z0-9]/g, '');
+  } catch (e) {
+    // Fallback if encoding fails
+    hash = cleanId.substring(0, 12);
+  }
+  
   const s1 = hash.substring(0, 4) || "X7R1";
   const s2 = hash.substring(4, 8) || "M9Q2";
   const s3 = hash.substring(8, 12) || "P4L5";
