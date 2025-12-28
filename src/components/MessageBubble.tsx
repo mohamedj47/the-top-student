@@ -116,11 +116,20 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
         if (aiAudio && aiAudio.data) {
             if (!audioContextRef.current) {
                 const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-                audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+                audioContextRef.current = new AudioContextClass();
             }
             const ctx = audioContextRef.current;
             const bytes = decodeBase64(aiAudio.data);
-            const audioBuffer = await decodePcmAudio(bytes, ctx, 24000, 1);
+
+            let audioBuffer: AudioBuffer;
+
+            if (aiAudio.source === 'gemini') {
+                // Gemini outputs raw PCM at 24000Hz
+                audioBuffer = await decodePcmAudio(bytes, ctx, 24000, 1);
+            } else {
+                // ElevenLabs outputs standard MPEG/MP3 which decodeAudioData handles
+                audioBuffer = await ctx.decodeAudioData(bytes.buffer);
+            }
             
             const source = ctx.createBufferSource();
             source.buffer = audioBuffer;
