@@ -1,4 +1,3 @@
-
 import { Subject, GradeLevel } from '../types';
 
 export interface DynamicQuestion {
@@ -12,52 +11,106 @@ export interface DynamicQuestion {
 }
 
 export class DynamicQuestionBank {
-  private static STORAGE_KEY = 'edu_dynamic_bank';
+  private static STORAGE_KEY = 'edu_dynamic_bank_v2';
 
-  static async save(data: DynamicQuestion) {
-    const bank = this.getAll();
-    bank.push(data);
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(bank.slice(-500))); // حفظ آخر 500 إجابة
-  }
-
+  /**
+   * استرجاع جميع البيانات المخزنة محلياً (Safe)
+   */
   static getAll(): DynamicQuestion[] {
-    const data = localStorage.getItem(this.STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  }
-
-  static async search(query: string, subject: string): Promise<DynamicQuestion | null> {
-    const bank = this.getAll();
-    const normalizedQuery = query.trim().toLowerCase();
-    
-    return bank.find(item => 
-      item.subject === subject && 
-      (normalizedQuery.includes(item.question.toLowerCase()) || item.question.toLowerCase().includes(normalizedQuery))
-    ) || null;
+    try {
+      const data = localStorage.getItem(this.STORAGE_KEY);
+      return data ? JSON.parse(data) : [];
+    } catch (e) {
+      return [];
+    }
   }
 
   /**
-   * البحث عن أي تطابق جزئي للكلمات في حالة الأوفلاين
+   * بحث دقيق (Exact + Includes + Reverse Includes)
    */
-  static async searchPartial(query: string, subject: string): Promise<DynamicQuestion | null> {
+  static async search(
+    query: string,
+    subject: string
+  ): Promise<DynamicQuestion | null> {
     const bank = this.getAll();
-    const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-    if (words.length === 0) return null;
+    const normalizedQuery = query.trim().toLowerCase();
 
-    return bank.find(item => 
-      item.subject === subject && 
-      words.some(word => item.question.toLowerCase().includes(word))
-    ) || null;
+    return (
+      bank.find(
+        item =>
+          item.subject === subject &&
+          (
+            normalizedQuery === item.question.toLowerCase() ||
+            item.question.toLowerCase().includes(normalizedQuery) ||
+            normalizedQuery.includes(item.question.toLowerCase())
+          )
+      ) || null
+    );
   }
 
-  static async add(question: string, answer: string, subject: string, grade: string, deviceId: string) {
+  /**
+   * بحث جزئي ذكي (Offline Friendly – Best Match)
+   */
+  static async searchPartial(
+    query: string,
+    subject: string
+  ): Promise<DynamicQuestion | null> {
     const bank = this.getAll();
-    const existing = bank.find(i => i.question === question);
+    const words = query
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(w => w.length > 3);
 
-    if (existing) {
+    if (words.length === 0) return null;
+
+    let bestMatch: DynamicQuestion | null = null;
+    let maxMatches = 0;
+
+    for (const item of bank) {
+      if (item.subject !== subject) continue;
+
+      const matchCount = words.filter(word =>
+        item.question.toLowerCase().includes(word)
+      ).length;
+
+      if (matchCount > maxMatches) {
+        maxMatches = matchCount;
+        bestMatch = item;
+      }
+    }
+
+    // كلمة واحدة كفاية للأوفلاين عشان يفضل التطبيق usable
+    return maxMatches >= 1 ? bestMatch : null;
+  }
+
+  /**
+   * إضافة / تحديث سؤال (Aggressive Learning Cache)
+   */
+  static async add(
+    question: string,
+    answer: string,
+    subject: string,
+    grade: string,
+    deviceId: string
+  ) {
+    const bank = this.getAll();
+
+    const existingIdx = bank.findIndex(
+      i =>
+        i.subject === subject &&
+        i.question.toLowerCase() === question.toLowerCase()
+    );
+
+    if (existingIdx !== -1) {
+      const existing = bank[existingIdx];
+
       if (!existing.askedBy.includes(deviceId)) {
         existing.askedBy.push(deviceId);
         existing.timesAsked++;
-        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(bank));
+        localStorage.setItem(
+          this.STORAGE_KEY,
+          JSON.stringify(bank)
+        );
       }
     } else {
       const newItem: DynamicQuestion = {
@@ -67,23 +120,37 @@ export class DynamicQuestionBank {
         grade,
         timestamp: Date.now(),
         timesAsked: 1,
-        askedBy: [deviceId]
+        askedBy: [deviceId],
       };
-      bank.push(newItem);
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(bank));
+
+      // الحفاظ على الأداء: آخر 500 سؤال فقط
+      const updatedBank = [newItem, ...bank].slice(0, 500);
+
+      localStorage.setItem(
+        this.STORAGE_KEY,
+        JSON.stringify(updatedBank)
+      );
     }
   }
-  
+
+  /**
+   * إحصائيات عامة
+   */
   static async getStats() {
-      const bank = this.getAll();
-      return {
-          totalQuestions: bank.length,
-          popularCount: bank.filter(q => q.timesAsked > 5).length
-      };
+    const bank = this.getAll();
+    return {
+      totalQuestions: bank.length,
+      popularCount: bank.filter(q => q.timesAsked > 2).length,
+    };
   }
 
+  /**
+   * أكثر الأسئلة شيوعًا
+   */
   static async getPopular(limit = 5) {
-      const bank = this.getAll();
-      return bank.sort((a, b) => b.timesAsked - a.timesAsked).slice(0, limit);
+    const bank = this.getAll();
+    return [...bank]
+      .sort((a, b) => b.timesAsked - a.timesAsked)
+      .slice(0, limit);
   }
 }
