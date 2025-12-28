@@ -28,16 +28,15 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
   }, [currentGrade]);
 
   useEffect(() => {
+    ensureDeviceId();
     if (forceOpen) {
         setLockReason('manual_upgrade');
         setViewState('manual');
-        ensureDeviceId();
     } else {
         checkStatus();
     }
   }, [forceOpen, currentGrade]);
 
-  // منع السكرول عند القفل
   useEffect(() => {
     if (viewState === 'locked') {
         document.body.style.overflow = 'hidden';
@@ -51,7 +50,6 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
     if (!storedId) {
       const array = new Uint32Array(1);
       window.crypto.getRandomValues(array);
-      // تنسيق STD مطابق للصورة
       storedId = 'STD-' + array[0].toString(16).toUpperCase().padStart(8, '0');
       localStorage.setItem('device_id', storedId);
     }
@@ -60,9 +58,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
   };
 
   const checkStatus = () => {
-    ensureDeviceId();
+    const id = ensureDeviceId();
     
-    // أولاً: تحقق من الاشتراك الفعلي
+    // 1. هل هناك اشتراك فعال لأي صف؟
     const grades = [GradeLevel.GRADE_10, GradeLevel.GRADE_11, GradeLevel.GRADE_12];
     let hasAnySubscription = false;
     
@@ -74,16 +72,13 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
       }
     }
 
-    // إذا كان هناك اشتراك لأي صف، نسمح بالدخول (أو يمكن تخصيصها لكل صف)
-    if (currentGrade) {
-      const specificExpiry = localStorage.getItem(`subscription_expiry_${currentGrade}`);
-      if (specificExpiry && new Date(specificExpiry) > new Date()) {
+    // إذا كان هناك اشتراك، نخفي النافذة فوراً
+    if (hasAnySubscription) {
         setViewState('hidden');
         return;
-      }
     }
 
-    // ثانياً: تحقق من الفترة التجريبية
+    // 2. التحقق من الـ 48 ساعة التجريبية
     let trialStartStr = localStorage.getItem('trial_start_date');
     if (!trialStartStr) {
         trialStartStr = new Date().toISOString();
@@ -103,18 +98,25 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
   };
 
   const handleActivate = () => {
-    const code = inputCode.trim().toUpperCase().replace(/\s/g, '');
-    const expectedCode = btoa(deviceId + SALT).substring(0, 12).toUpperCase();
+    // تنظيف المدخلات والمقارنة بالجوهر فقط (A-Z و 0-9)
+    const cleanInput = inputCode.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    
+    // توليد الكود المتوقع بنفس منطق المولد
+    const rawExpected = btoa(deviceId.toUpperCase() + SALT).replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    const expected = rawExpected.substring(0, 12);
 
-    if (code === expectedCode) {
+    if (cleanInput === expected && cleanInput.length === 12) {
+      // تفعيل الصف الحالي أو الصف الـ 12 كافتراضي
       const gradeToActivate = selectedGrade || currentGrade || GradeLevel.GRADE_12;
-      const now = new Date();
-      now.setDate(now.getDate() + 30); 
-      localStorage.setItem(`subscription_expiry_${gradeToActivate}`, now.toISOString());
-      alert(`تم تفعيل "المعلم الذكي" بنجاح لمدة 30 يوم!`);
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + 30); 
+      
+      localStorage.setItem(`subscription_expiry_${gradeToActivate}`, expiryDate.toISOString());
+      
+      alert(`تم التفعيل بنجاح! شكراً لاشتراكك في المعلم الذكي.`);
       window.location.reload(); 
     } else {
-      setError("كود التفعيل غير صحيح لهذا الجهاز.");
+      setError("كود التفعيل غير صحيح لهذا الجهاز. يرجى التأكد من كتابة المعرف بشكل صحيح في المولد.");
     }
   };
 
@@ -129,21 +131,18 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
     <div className="fixed inset-0 z-[9999] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 font-sans text-right" dir="rtl">
       <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 relative">
         
-        {/* زر الإغلاق يظهر فقط في حالة الترقية اليدوية وليس القفل الإجباري */}
         {viewState === 'manual' && onClose && (
             <button onClick={onClose} className="absolute top-6 left-6 p-2 bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
                 <X size={20} />
             </button>
         )}
 
-        {/* الرأس - مطابق للصورة */}
         <div className="pt-10 pb-6 px-6 text-center">
            <h2 className="text-3xl font-black text-slate-800 mb-1">تفعيل المعلم الذكي</h2>
            <p className="text-slate-500 text-sm font-bold">نظام التشفير الفردي للجهاز (صلاحية 30 يوم)</p>
         </div>
 
         <div className="px-8 pb-10 space-y-6">
-           {/* العرض الخاص - مطابق للصورة */}
            <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-center justify-between gap-4">
               <div className="flex flex-col">
                  <span className="text-[10px] text-slate-400 font-bold line-through decoration-red-400">300 جنيه</span>
@@ -157,7 +156,6 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
               </div>
            </div>
 
-           {/* معرف الجهاز - مطابق للصورة */}
            <div className="space-y-2">
               <label className="block text-sm font-bold text-slate-700 mr-2">معرف الجهاز الخاص بك:</label>
               <div className="bg-[#1e293b] p-4 rounded-2xl flex items-center justify-between shadow-inner group">
@@ -176,7 +174,6 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
               </div>
            </div>
 
-           {/* زر الطلب الأخضر - مطابق للصورة */}
            <button 
             onClick={handleWhatsAppClick}
             className="w-full bg-[#2ecc71] hover:bg-[#27ae60] text-white font-black py-4 rounded-2xl shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-3 text-lg"
@@ -185,7 +182,6 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
             <span>طلب كود التفعيل (90 جنيه)</span>
           </button>
            
-           {/* إدخال الكود - مطابق للصورة */}
            <div className="space-y-4 pt-2">
               <div className="relative">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
@@ -196,19 +192,24 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
                 type="text" 
                 value={inputCode}
                 onChange={(e) => setInputCode(e.target.value)}
-                className="block w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl text-center font-mono text-2xl uppercase tracking-[0.3em] text-slate-700 placeholder:text-slate-200 focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
-                placeholder="X X X X - X X X X - X X X X"
+                className="block w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl text-center font-mono text-2xl uppercase tracking-[0.2em] text-slate-700 placeholder:text-slate-200 focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                placeholder="XXXX - XXXX - XXXX"
               />
 
               <button 
                 onClick={handleActivate}
-                className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-[0.98] text-lg"
+                disabled={inputCode.replace(/[^A-Z0-9]/gi, '').length < 12}
+                className={`w-full font-black py-4 rounded-2xl shadow-xl transition-all active:scale-[0.98] text-lg ${
+                    inputCode.replace(/[^A-Z0-9]/gi, '').length >= 12 
+                    ? 'bg-slate-900 hover:bg-black text-white' 
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
               >
                 تفعيل الاشتراك الآن
               </button>
               
               {error && (
-                <div className="text-red-500 text-xs font-bold text-center animate-bounce">
+                <div className="text-red-500 text-xs font-bold text-center bg-red-50 p-2 rounded-lg border border-red-100">
                     {error}
                 </div>
               )}
