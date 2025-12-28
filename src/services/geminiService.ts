@@ -104,7 +104,7 @@ export async function streamSpeech(text: string, onComplete?: () => void): Promi
  * تعطيل استخدام API خارجي للصوت التزاماً بالقيود الصارمة
  * يتم الاعتماد كلياً على Web Speech API المحلي
  */
-export async function generateAiSpeech(text: string): Promise<{ data: string } | null> {
+export async function generateAiSpeech(text: string): Promise<null> {
   return null; 
 }
 
@@ -220,27 +220,17 @@ export async function evaluateStudentLevel(history: Message[], subject: Subject)
   } catch (error) { return null; }
 }
 
-/**
- * تحويل base64 إلى Uint8Array مع معالجة الأخطاء
- */
 export function decodeBase64(base64: string): Uint8Array {
-  if (!base64) return new Uint8Array(0);
-  try {
-    const binaryString = atob(base64);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes;
-  } catch (e) {
-    console.error("decodeBase64 failed", e);
-    return new Uint8Array(0);
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
   }
+  return bytes;
 }
 
 export async function decodePcmAudio(data: Uint8Array, ctx: AudioContext, sampleRate: number = 24000, numChannels: number = 1): Promise<AudioBuffer> {
-  if (!data || data.length === 0) throw new Error("Empty audio data");
   const dataInt16 = new Int16Array(data.buffer);
   const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
