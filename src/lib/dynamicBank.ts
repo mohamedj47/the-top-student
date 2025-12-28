@@ -12,69 +12,48 @@ export interface DynamicQuestion {
 }
 
 export class DynamicQuestionBank {
-  private static STORAGE_KEY = 'edu_dynamic_bank_v2';
+  private static STORAGE_KEY = 'edu_dynamic_bank';
 
-  /**
-   * استرجاع جميع البيانات المخزنة محلياً
-   */
-  static getAll(): DynamicQuestion[] {
-    try {
-      const data = localStorage.getItem(this.STORAGE_KEY);
-      return data ? JSON.parse(data) : [];
-    } catch (e) {
-      return [];
-    }
+  static async save(data: DynamicQuestion) {
+    const bank = this.getAll();
+    bank.push(data);
+    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(bank.slice(-500))); // حفظ آخر 500 إجابة
   }
 
-  /**
-   * بحث دقيق في الذاكرة المحلية
-   */
+  static getAll(): DynamicQuestion[] {
+    const data = localStorage.getItem(this.STORAGE_KEY);
+    return data ? JSON.parse(data) : [];
+  }
+
   static async search(query: string, subject: string): Promise<DynamicQuestion | null> {
     const bank = this.getAll();
     const normalizedQuery = query.trim().toLowerCase();
     
     return bank.find(item => 
       item.subject === subject && 
-      (normalizedQuery === item.question.toLowerCase() || 
-       item.question.toLowerCase().includes(normalizedQuery) ||
-       normalizedQuery.includes(item.question.toLowerCase()))
+      (normalizedQuery.includes(item.question.toLowerCase()) || item.question.toLowerCase().includes(normalizedQuery))
     ) || null;
   }
 
   /**
-   * بحث جزئي (Partial Match) لتحسين وضع الأوفلاين
+   * البحث عن أي تطابق جزئي للكلمات في حالة الأوفلاين
    */
   static async searchPartial(query: string, subject: string): Promise<DynamicQuestion | null> {
     const bank = this.getAll();
     const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
     if (words.length === 0) return null;
 
-    // محاولة إيجاد إجابة تحتوي على أكثر عدد من الكلمات المفتاحية للسؤال
-    let bestMatch: DynamicQuestion | null = null;
-    let maxMatches = 0;
-
-    for (const item of bank) {
-      if (item.subject !== subject) continue;
-      const matchCount = words.filter(word => item.question.toLowerCase().includes(word)).length;
-      if (matchCount > maxMatches) {
-        maxMatches = matchCount;
-        bestMatch = item;
-      }
-    }
-
-    // إذا كان هناك تطابق لكلمة واحدة على الأقل، نعتبره نتيجة صالحة للأوفلاين لضمان بقاء التطبيق Usable
-    return maxMatches >= 1 ? bestMatch : null;
+    return bank.find(item => 
+      item.subject === subject && 
+      words.some(word => item.question.toLowerCase().includes(word))
+    ) || null;
   }
 
-  /**
-   * إضافة إجابة جديدة للذاكرة (Aggressive Cache)
-   */
   static async add(question: string, answer: string, subject: string, grade: string, deviceId: string) {
     const bank = this.getAll();
-    const existingIdx = bank.findIndex(i => i.question.toLowerCase() === question.toLowerCase());
+    const existing = bank.find(i => i.question === question);
 
-    if (existingIdx !== -1) {
-      const existing = bank[existingIdx];
+    if (existing) {
       if (!existing.askedBy.includes(deviceId)) {
         existing.askedBy.push(deviceId);
         existing.timesAsked++;
@@ -90,23 +69,21 @@ export class DynamicQuestionBank {
         timesAsked: 1,
         askedBy: [deviceId]
       };
-      
-      // الحفاظ على سعة التخزين (آخر 500 سؤال لضمان الأداء)
-      const updatedBank = [newItem, ...bank].slice(0, 500);
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(updatedBank));
+      bank.push(newItem);
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(bank));
     }
   }
   
   static async getStats() {
-    const bank = this.getAll();
-    return {
-      totalQuestions: bank.length,
-      popularCount: bank.filter(q => q.timesAsked > 2).length
-    };
+      const bank = this.getAll();
+      return {
+          totalQuestions: bank.length,
+          popularCount: bank.filter(q => q.timesAsked > 5).length
+      };
   }
 
   static async getPopular(limit = 5) {
-    const bank = this.getAll();
-    return bank.sort((a, b) => b.timesAsked - a.timesAsked).slice(0, limit);
+      const bank = this.getAll();
+      return bank.sort((a, b) => b.timesAsked - a.timesAsked).slice(0, limit);
   }
 }
