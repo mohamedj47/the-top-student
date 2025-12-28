@@ -8,23 +8,31 @@ import { streamSpeech, generateAiSpeech, cleanMathNotation, decodeBase64, decode
 
 const InteractiveText: React.FC<{ text: string, onQuote?: (t: string) => void }> = ({ text, onQuote }) => {
   if (!text) return null;
+  // تقسيم النص إلى جمل بناءً على علامات الترقيم العربية والانجليزية
   const sentences = text.split(/(?<=[.،؟!:\n])\s+/);
+  
   return (
     <>
-      {sentences.map((sentence, idx) => (
-        <span
-          key={idx}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (onQuote && sentence.trim().length > 2) {
-              onQuote(sentence.trim());
-            }
-          }}
-          className="hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer rounded px-0.5 transition-colors duration-150 inline decoration-indigo-200 decoration-dotted hover:underline font-medium"
-        >
-          {sentence}
-        </span>
-      ))}
+      {sentences.map((sentence, idx) => {
+        const trimmed = sentence.trim();
+        if (!trimmed) return null;
+        
+        return (
+          <span
+            key={idx}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onQuote && trimmed.length > 1) {
+                onQuote(trimmed);
+              }
+            }}
+            className="hover:bg-indigo-100 hover:text-indigo-800 cursor-pointer rounded px-0.5 transition-all duration-200 inline decoration-indigo-300/30 decoration-dotted hover:underline font-medium select-none active:bg-indigo-200"
+            title="انقر للاستفسار عن هذا السطر"
+          >
+            {sentence}
+          </span>
+        );
+      })}
     </>
   );
 };
@@ -68,7 +76,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
   const [isCopied, setIsCopied] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isAiSpeechLoading, setIsAiSpeechLoading] = useState(false);
-  const [isSimplifyModalOpen, setIsSimplifyModalOpen] = useState(false);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
@@ -108,7 +115,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
 
         if (aiAudio && aiAudio.data) {
             if (aiAudio.source === 'gemini' && typeof aiAudio.data === 'string') {
-                // Gemini PCM Output (Kore)
                 const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
                 if (!audioContextRef.current) audioContextRef.current = new AudioContextClass();
                 const ctx = audioContextRef.current;
@@ -121,7 +127,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
                 sourceNodeRef.current = source;
                 source.start();
             } else if (aiAudio.source === 'api' && aiAudio.data instanceof Blob) {
-                // ElevenLabs MP3 Output (Fallback Teacher)
                 const audioUrl = URL.createObjectURL(aiAudio.data);
                 const audio = new Audio(audioUrl);
                 htmlAudioRef.current = audio;
@@ -132,7 +137,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
                 audio.play();
             }
         } else {
-            // Fallback to local device speech if everything else fails
             await streamSpeech(displayChatText, () => setIsSpeaking(false));
         }
     } catch (err) {
