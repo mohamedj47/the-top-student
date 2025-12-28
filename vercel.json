@@ -1,0 +1,10 @@
+
+{
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "destination": "https://the-top-student-9c8n.vercel.app/$1",
+      "permanent": true
+    }
+  ]
+}
