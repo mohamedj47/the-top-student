@@ -8,26 +8,29 @@ import { streamSpeech, generateAiSpeech, cleanMathNotation, decodeBase64, decode
 
 const InteractiveText: React.FC<{ text: string, onQuote?: (t: string) => void }> = ({ text, onQuote }) => {
   if (!text) return null;
-  // تقسيم النص إلى جمل بناءً على علامات الترقيم العربية والانجليزية
+  
+  // تحسين التقسيم: عدم تقسيم الرموز الرياضية الشائعة مثل \frac أو \sqrt أو \Rightarrow
+  // سنقوم بالتقسيم بناءً على علامات الترقيم العربية والانجليزية والسطور الجديدة فقط
   const sentences = text.split(/(?<=[.،؟!:\n])\s+/);
   
   return (
     <>
       {sentences.map((sentence, idx) => {
         const trimmed = sentence.trim();
-        if (!trimmed) return null;
+        if (!trimmed || trimmed.length < 1) return sentence;
         
         return (
           <span
             key={idx}
             onClick={(e) => {
               e.stopPropagation();
-              if (onQuote && trimmed.length > 1) {
+              e.preventDefault();
+              if (onQuote) {
                 onQuote(trimmed);
               }
             }}
-            className="hover:bg-indigo-100 hover:text-indigo-800 cursor-pointer rounded px-0.5 transition-all duration-200 inline decoration-indigo-300/30 decoration-dotted hover:underline font-medium select-none active:bg-indigo-200"
-            title="انقر للاستفسار عن هذا السطر"
+            className="hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer rounded px-1 transition-all duration-200 inline-block md:inline decoration-indigo-300/30 decoration-dotted hover:underline font-semibold active:scale-[0.98] active:bg-indigo-100"
+            title="انقر للاستفسار عن هذا الجزء"
           >
             {sentence}
           </span>
@@ -153,20 +156,31 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
     setTimeout(() => setIsCopied(false), 2000);
   };
 
+  // وظيفة مساعدة لمعالجة الأطفال (Children) وتطبيق InteractiveText عليهم
+  const wrapWithInteractive = (children: any) => {
+    return React.Children.map(children, child => {
+      if (typeof child === 'string') {
+        return <InteractiveText text={child} onQuote={onQuote} />;
+      }
+      return child;
+    });
+  };
+
   const markdownComponents = {
     p: ({ children }: any) => (
       <p className="mb-3 last:mb-0 leading-[1.9] font-medium">
-        {React.Children.map(children, child => 
-          typeof child === 'string' ? <InteractiveText text={child} onQuote={onQuote} /> : child
-        )}
+        {wrapWithInteractive(children)}
       </p>
     ),
     li: ({ children }: any) => (
       <li className="mb-2 leading-[1.9] font-medium">
-        {React.Children.map(children, child => 
-          typeof child === 'string' ? <InteractiveText text={child} onQuote={onQuote} /> : child
-        )}
+        {wrapWithInteractive(children)}
       </li>
+    ),
+    td: ({ children }: any) => (
+      <td className="p-3 border-b border-slate-50 text-right">
+        {wrapWithInteractive(children)}
+      </td>
     ),
     code({node, className, children, ...props}: any) {
       const match = /language-mermaid/.exec(className || '')
