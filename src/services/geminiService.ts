@@ -3,7 +3,6 @@ import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender, Pe
 import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { questionsBank } from "../lib/questionsBank";
 import { DynamicQuestionBank } from "../lib/dynamicBank";
-import { AudioCache } from "../lib/audioCache";
 import { getApiKey, ensureApiKey } from "../utils/apiKeyManager";
 
 export function cleanMathNotation(text: string): string {
@@ -46,7 +45,6 @@ export async function decodePcmAudio(
 export function sanitizeForSpeech(text: string): string {
   if (!text) return "";
   return text
-    // إزالة رموز LaTeX والماركداون الشائعة
     .replace(/\\\[|\\\]|\\\(|\\\)/g, ' ')
     .replace(/\$+/g, ' ')
     .replace(/\*+/g, ' ')
@@ -54,9 +52,7 @@ export function sanitizeForSpeech(text: string): string {
     .replace(/_+/g, ' ')
     .replace(/\|/g, ' . ')
     .replace(/-{3,}/g, ' ')
-    // إزالة الرموز الرياضية التي قد تربك القارئ الآلي
     .replace(/[><=\^\/\{\}\[\]]/g, ' ')
-    // تحويل القوائم إلى فواصل منطقية
     .replace(/^\s*[\d•.-]+\s+/gm, ' . ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -108,7 +104,7 @@ export async function evaluateStudentLevel(
 }
 
 /**
- * استخدام Web Speech API المحلي حصراً لضمان العمل أوفلاين
+ * استخدام Web Speech API المحلي حصراً لضمان العمل أوفلاين كحل أخير
  */
 export async function streamSpeech(text: string, onComplete?: () => void): Promise<void> {
   if (!window.speechSynthesis) { onComplete?.(); return; }
@@ -125,7 +121,7 @@ export async function streamSpeech(text: string, onComplete?: () => void): Promi
     utterance.voice = arabicVoice;
     utterance.lang = 'ar-SA';
     utterance.pitch = 1.0; 
-    utterance.rate = 0.9; // سرعة تعليمية هادئة
+    utterance.rate = 0.9;
     utterance.onend = () => { currentSentence++; setTimeout(speakNext, 200); };
     utterance.onerror = () => { currentSentence++; speakNext(); };
     window.speechSynthesis.speak(utterance);
@@ -136,10 +132,90 @@ export async function streamSpeech(text: string, onComplete?: () => void): Promi
 }
 
 /**
- * تعطيل Voice API الخارجي لضمان الخصوصية والعمل أوفلاين
+ * ElevenLabs Fallback Logic (Arabic Female Teacher)
  */
-export async function generateAiSpeech(text: string): Promise<{ data: string; source: 'gemini' | 'cache' } | null> {
-  return null; // Force fallback to streamSpeech (Web Speech API)
+async function generateElevenLabsSpeech(text: string): Promise<{ data: string; source: 'elevenlabs' } | null> {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) return null;
+
+  // Stable Arabic Female Voice ID (e.g., "Bella" or a custom one)
+  // Using a common high-quality female voice ID
+  const VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Example: Rachel/Bella style
+
+  try {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'xi-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        text: sanitizeForSpeech(text),
+        model_id: "eleven_multilingual_v2",
+        voice_settings: {
+          stability: 0.7,
+          similarity_boost: 0.85,
+          style: 0.0,
+          use_speaker_boost: true
+        }
+      }),
+    });
+
+    if (!response.ok) throw new Error('ElevenLabs API failed');
+
+    const arrayBuffer = await response.arrayBuffer();
+    const base64 = btoa(
+      new Uint8Array(arrayBuffer)
+        .reduce((data, byte) => data + String.fromCharCode(byte), '')
+    );
+
+    return { data: base64, source: 'elevenlabs' };
+  } catch (e) {
+    console.error("ElevenLabs Fallback Failed:", e);
+    return null;
+  }
+}
+
+/**
+ * الإجراء الرئيسي لتوليد الصوت بالذكاء الاصطناعي
+ * 1. محاولة استخدام Gemini TTS (صوت Kore)
+ * 2. الفشل يحول إلى ElevenLabs (صوت معلمة)
+ * 3. الفشل النهائي يعود لـ null ليقوم المكون باستخدام Web Speech API
+ */
+export async function generateAiSpeech(text: string): Promise<{ data: string; source: 'gemini' | 'elevenlabs' | 'cache' } | null> {
+  if (typeof window === 'undefined') return null; // Safe for Vercel SSR
+
+  try {
+    // 1. محاولة Gemini 2.5 Flash TTS (Primary)
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: `Say cheerfully and clearly: ${sanitizeForSpeech(text)}` }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: 'Kore' },
+          },
+        },
+      },
+    });
+
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (base64Audio) {
+      return { data: base64Audio, source: 'gemini' };
+    }
+
+    // 2. إذا لم يتوفر Gemini، ننتقل لـ ElevenLabs
+    const elevenLabsResult = await generateElevenLabsSpeech(text);
+    if (elevenLabsResult) return { data: elevenLabsResult.data, source: 'elevenlabs' };
+
+    return null;
+  } catch (error) {
+    console.warn("AI Speech Generation failed, checking fallbacks...", error);
+    // محاولة ElevenLabs عند أي خطأ في Gemini
+    return await generateElevenLabsSpeech(text);
+  }
 }
 
 export async function generateStreamResponse(
@@ -152,25 +228,21 @@ export async function generateStreamResponse(
   options?: GenerationOptions,
   deviceId?: string
 ): Promise<string> {
-  // 1. فحص البنك الثابت أولاً (Local Priority)
   const staticMatch = searchInStaticBank(userMessage);
   if (staticMatch) { 
     onChunk(staticMatch.answer); 
     return staticMatch.answer; 
   }
 
-  // 2. فحص البنك الديناميكي المخزن محلياً (Cache Priority)
   const cachedMatch = await DynamicQuestionBank.search(userMessage, subject);
   if (cachedMatch) { 
     onChunk(cachedMatch.answer); 
     return cachedMatch.answer; 
   }
 
-  // 3. التحقق من الإنترنت قبل طلب الـ API
   if (!navigator.onLine) {
     const offlineMsg = "عذراً يا بطل، أنت الآن في وضع الأوفلاين. جاري البحث في ذاكرتي المحلية عن أقرب إجابة لموضوع سؤالك...";
     onChunk(offlineMsg);
-    // محاولة البحث عن جزء من السؤال في الكاش
     const partialMatch = await DynamicQuestionBank.searchPartial(userMessage, subject);
     if (partialMatch) {
         onChunk(`(تم العثور على شرح مشابه من سجل مذاكرتك):\n\n${partialMatch.answer}`);
@@ -201,7 +273,6 @@ export async function generateStreamResponse(
       onChunk(cleanMathNotation(fullText));
     }
 
-    // حفظ هجومي للنتيجة لضمان توفرها أوفلاين في المرة القادمة
     if (fullText.length > 10) {
       DynamicQuestionBank.add(userMessage, fullText, subject, grade, deviceId || 'local_user');
     }
