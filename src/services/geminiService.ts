@@ -39,9 +39,6 @@ export async function decodePcmAudio(
   return buffer;
 }
 
-/**
- * تنظيف النص للصوت: إزالة LaTeX والرموز الرياضية والماركداون تماماً
- */
 export function sanitizeForSpeech(text: string): string {
   if (!text) return "";
   return text
@@ -103,9 +100,6 @@ export async function evaluateStudentLevel(
   } catch (error) { return null; }
 }
 
-/**
- * استخدام Web Speech API المحلي حصراً لضمان العمل أوفلاين كحل أخير
- */
 export async function streamSpeech(text: string, onComplete?: () => void): Promise<void> {
   if (!window.speechSynthesis) { onComplete?.(); return; }
   window.speechSynthesis.cancel();
@@ -132,65 +126,38 @@ export async function streamSpeech(text: string, onComplete?: () => void): Promi
 }
 
 /**
- * ElevenLabs Fallback Logic (Arabic Female Teacher)
+ * دالة طلب الصوت من ElevenLabs عبر Serverless API المحمي في Vercel
  */
-async function generateElevenLabsSpeech(text: string): Promise<{ data: string; source: 'elevenlabs' } | null> {
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  if (!apiKey) return null;
-
-  // Stable Arabic Female Voice ID (e.g., "Bella" or a custom one)
-  // Using a common high-quality female voice ID
-  const VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Example: Rachel/Bella style
-
+async function fetchFallbackSpeech(text: string): Promise<Blob | null> {
   try {
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
+    const response = await fetch('/api/voice', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'xi-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        text: sanitizeForSpeech(text),
-        model_id: "eleven_multilingual_v2",
-        voice_settings: {
-          stability: 0.7,
-          similarity_boost: 0.85,
-          style: 0.0,
-          use_speaker_boost: true
-        }
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: sanitizeForSpeech(text) }),
     });
-
-    if (!response.ok) throw new Error('ElevenLabs API failed');
-
-    const arrayBuffer = await response.arrayBuffer();
-    const base64 = btoa(
-      new Uint8Array(arrayBuffer)
-        .reduce((data, byte) => data + String.fromCharCode(byte), '')
-    );
-
-    return { data: base64, source: 'elevenlabs' };
+    if (!response.ok) return null;
+    return await response.blob();
   } catch (e) {
-    console.error("ElevenLabs Fallback Failed:", e);
+    console.error("API Fallback failed:", e);
     return null;
   }
 }
 
 /**
- * الإجراء الرئيسي لتوليد الصوت بالذكاء الاصطناعي
- * 1. محاولة استخدام Gemini TTS (صوت Kore)
- * 2. الفشل يحول إلى ElevenLabs (صوت معلمة)
- * 3. الفشل النهائي يعود لـ null ليقوم المكون باستخدام Web Speech API
+ * الإجراء الرئيسي لتوليد الصوت بالذكاء الاصطناعي (Vercel Safe)
+ * المحاولة الأولى: Gemini Kore (Native PCM)
+ * الفشل: ElevenLabs (Serverless MP3)
+ * الفشل النهائي: Web Speech API
  */
-export async function generateAiSpeech(text: string): Promise<{ data: string; source: 'gemini' | 'elevenlabs' | 'cache' } | null> {
-  if (typeof window === 'undefined') return null; // Safe for Vercel SSR
+export async function generateAiSpeech(text: string): Promise<{ data: string | Blob; source: 'gemini' | 'api' } | null> {
+  if (typeof window === 'undefined') return null;
 
   try {
-    // 1. محاولة Gemini 2.5 Flash TTS (Primary)
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // 1. محاولة Gemini 2.5 Flash TTS (Kore)
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Say cheerfully and clearly: ${sanitizeForSpeech(text)}` }] }],
+      contents: [{ parts: [{ text: `Explain clearly in Arabic: ${sanitizeForSpeech(text)}` }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
@@ -206,15 +173,16 @@ export async function generateAiSpeech(text: string): Promise<{ data: string; so
       return { data: base64Audio, source: 'gemini' };
     }
 
-    // 2. إذا لم يتوفر Gemini، ننتقل لـ ElevenLabs
-    const elevenLabsResult = await generateElevenLabsSpeech(text);
-    if (elevenLabsResult) return { data: elevenLabsResult.data, source: 'elevenlabs' };
+    // 2. إذا فشل Gemini، ننتقل تلقائياً لـ ElevenLabs عبر الـ API الخاص بنا
+    const blob = await fetchFallbackSpeech(text);
+    if (blob) return { data: blob, source: 'api' };
 
     return null;
   } catch (error) {
-    console.warn("AI Speech Generation failed, checking fallbacks...", error);
-    // محاولة ElevenLabs عند أي خطأ في Gemini
-    return await generateElevenLabsSpeech(text);
+    console.warn("Primary TTS failed, checking fallback...");
+    const blob = await fetchFallbackSpeech(text);
+    if (blob) return { data: blob, source: 'api' };
+    return null;
   }
 }
 
@@ -241,11 +209,11 @@ export async function generateStreamResponse(
   }
 
   if (!navigator.onLine) {
-    const offlineMsg = "عذراً يا بطل، أنت الآن في وضع الأوفلاين. جاري البحث في ذاكرتي المحلية عن أقرب إجابة لموضوع سؤالك...";
+    const offlineMsg = "عذراً، أنت في وضع الأوفلاين. جاري البحث في الذاكرة المحلية...";
     onChunk(offlineMsg);
     const partialMatch = await DynamicQuestionBank.searchPartial(userMessage, subject);
     if (partialMatch) {
-        onChunk(`(تم العثور على شرح مشابه من سجل مذاكرتك):\n\n${partialMatch.answer}`);
+        onChunk(`\n\n${partialMatch.answer}`);
         return partialMatch.answer;
     }
     return offlineMsg;
@@ -278,10 +246,8 @@ export async function generateStreamResponse(
     }
     return fullText;
   } catch (error) {
-    const errorFallback = "جاري محاولة استرجاع الشرح من الذاكرة المحلية بسبب ضغط على الخادم أو مشكلة في الاتصال...";
-    onChunk(errorFallback);
     const partial = await DynamicQuestionBank.searchPartial(userMessage, subject);
-    return partial ? partial.answer : errorFallback;
+    return partial ? partial.answer : "حدث خطأ في الاتصال.";
   }
 }
 
