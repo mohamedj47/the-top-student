@@ -6,15 +6,9 @@ import remarkGfm from 'remark-gfm';
 import { Bot, User, Copy, Check, Volume2, StopCircle, Loader2, Lightbulb, X, Sparkles } from 'lucide-react';
 import { streamSpeech, generateAiSpeech, cleanMathNotation, decodeBase64, decodePcmAudio } from '../services/geminiService';
 
-/**
- * مكون لمعالجة النصوص وجعل كل جملة قابلة للضغط بشكل مستقل مع دعم خط Cairo
- */
 const InteractiveText: React.FC<{ text: string, onQuote?: (t: string) => void }> = ({ text, onQuote }) => {
   if (!text) return null;
-
-  // تقسيم النص بناءً على علامات الترقيم أو الأسطر الجديدة لضمان التفاعل سطر بسطر
   const sentences = text.split(/(?<=[.،؟!:\n])\s+/);
-
   return (
     <>
       {sentences.map((sentence, idx) => (
@@ -27,7 +21,6 @@ const InteractiveText: React.FC<{ text: string, onQuote?: (t: string) => void }>
             }
           }}
           className="hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer rounded px-0.5 transition-colors duration-150 inline decoration-indigo-200 decoration-dotted hover:underline font-medium"
-          title="اضغط للاستفسار عن هذه الجملة"
         >
           {sentence}
         </span>
@@ -39,7 +32,6 @@ const InteractiveText: React.FC<{ text: string, onQuote?: (t: string) => void }>
 const MermaidDiagram: React.FC<{ chart: string }> = ({ chart }) => {
   const ref = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>('');
-
   useEffect(() => {
     const render = async () => {
       if (ref.current && (window as any).mermaid) {
@@ -54,7 +46,6 @@ const MermaidDiagram: React.FC<{ chart: string }> = ({ chart }) => {
     };
     render();
   }, [chart]);
-
   if (!svg) return null;
   return (
     <div 
@@ -81,6 +72,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const htmlAudioRef = useRef<HTMLAudioElement | null>(null);
   const displayChatText = cleanMathNotation(message.text);
 
   const stopAudio = () => {
@@ -89,14 +81,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
         try { sourceNodeRef.current.stop(); } catch(e) {}
         sourceNodeRef.current = null;
     }
+    if (htmlAudioRef.current) {
+        htmlAudioRef.current.pause();
+        htmlAudioRef.current = null;
+    }
     setIsSpeaking(false);
   };
 
   useEffect(() => {
-      return () => {
-          stopAudio();
-          if (audioContextRef.current) audioContextRef.current.close();
-      };
+      return () => stopAudio();
   }, []);
 
   const handleSpeech = async (e: React.MouseEvent) => {
@@ -114,33 +107,36 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
         setIsAiSpeechLoading(false);
 
         if (aiAudio && aiAudio.data) {
-            if (!audioContextRef.current) {
+            if (aiAudio.source === 'gemini' && typeof aiAudio.data === 'string') {
+                // Gemini PCM Output (Kore)
                 const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-                audioContextRef.current = new AudioContextClass();
+                if (!audioContextRef.current) audioContextRef.current = new AudioContextClass();
+                const ctx = audioContextRef.current;
+                const bytes = decodeBase64(aiAudio.data);
+                const buffer = await decodePcmAudio(bytes, ctx, 24000, 1);
+                const source = ctx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(ctx.destination);
+                source.onended = () => setIsSpeaking(false);
+                sourceNodeRef.current = source;
+                source.start();
+            } else if (aiAudio.source === 'api' && aiAudio.data instanceof Blob) {
+                // ElevenLabs MP3 Output (Fallback Teacher)
+                const audioUrl = URL.createObjectURL(aiAudio.data);
+                const audio = new Audio(audioUrl);
+                htmlAudioRef.current = audio;
+                audio.onended = () => {
+                    setIsSpeaking(false);
+                    URL.revokeObjectURL(audioUrl);
+                };
+                audio.play();
             }
-            const ctx = audioContextRef.current;
-            const bytes = decodeBase64(aiAudio.data);
-
-            let audioBuffer: AudioBuffer;
-
-            if (aiAudio.source === 'gemini') {
-                // Gemini outputs raw PCM at 24000Hz
-                audioBuffer = await decodePcmAudio(bytes, ctx, 24000, 1);
-            } else {
-                // ElevenLabs outputs standard MPEG/MP3 which decodeAudioData handles
-                audioBuffer = await ctx.decodeAudioData(bytes.buffer);
-            }
-            
-            const source = ctx.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(ctx.destination);
-            source.onended = () => { if (sourceNodeRef.current === source) setIsSpeaking(false); };
-            sourceNodeRef.current = source;
-            source.start();
         } else {
+            // Fallback to local device speech if everything else fails
             await streamSpeech(displayChatText, () => setIsSpeaking(false));
         }
     } catch (err) {
+        console.error("Audio playback error:", err);
         setIsAiSpeechLoading(false);
         await streamSpeech(displayChatText, () => setIsSpeaking(false));
     }
@@ -153,9 +149,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
     setTimeout(() => setIsCopied(false), 2000);
   };
 
-  const hasSimplification = !!(message.simplifiedText || message.visualDescription);
-
-  // مخصصات ريندر الماركداون لجعل العناصر قابلة للضغط مع التنسيق المطلوب
   const markdownComponents = {
     p: ({ children }: any) => (
       <p className="mb-3 last:mb-0 leading-[1.9] font-medium">
@@ -170,13 +163,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
           typeof child === 'string' ? <InteractiveText text={child} onQuote={onQuote} /> : child
         )}
       </li>
-    ),
-    td: ({ children }: any) => (
-      <td className="p-3 leading-[1.6] font-medium">
-        {React.Children.map(children, child => 
-          typeof child === 'string' ? <InteractiveText text={child} onQuote={onQuote} /> : child
-        )}
-      </td>
     ),
     code({node, className, children, ...props}: any) {
       const match = /language-mermaid/.exec(className || '')
@@ -195,19 +181,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
           {isUser ? <User size={16} /> : <Bot size={18} />}
         </div>
         <div className={`max-w-[95%] md:max-w-[85%] flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-          <div 
-            className={`px-5 py-3 rounded-2xl shadow-sm markdown-body text-[15px] md:text-[17px] relative transition-all select-none ${
-              isUser ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white border border-slate-100 text-slate-900 rounded-tl-none'
-            }`}
-          >
+          <div className={`px-5 py-3 rounded-2xl shadow-sm markdown-body text-[15px] md:text-[17px] relative transition-all ${isUser ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white border border-slate-100 text-slate-900 rounded-tl-none'}`}>
             {!isUser && (
-              <div className="flex justify-end gap-2 mb-2 border-b border-slate-50 pb-2 no-print">
-                {hasSimplification && (
-                  <button onClick={(e) => { e.stopPropagation(); setIsSimplifyModalOpen(true); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-amber-50 text-amber-600 hover:bg-amber-100 transition-all border border-amber-200">
-                    <Lightbulb size={12} />
-                    <span>بسطها لي</span>
-                  </button>
-                )}
+              <div className="flex justify-end gap-2 mb-2 border-b border-slate-50 pb-2">
                 <button 
                   onClick={handleSpeech} 
                   disabled={isAiSpeechLoading}
@@ -221,46 +197,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, subject, 
                 </button>
               </div>
             )}
-            
-            <ReactMarkdown 
-              remarkPlugins={[remarkGfm]}
-              components={markdownComponents as any}
-            >
-              {displayChatText}
-            </ReactMarkdown>
-            
-            {!isUser && (
-                <div className="mt-3 pt-2 border-t border-slate-50 text-[10px] text-slate-400 font-bold flex items-center gap-1.5">
-                    <Sparkles size={12} className="text-indigo-400" />
-                    <span>يمكنك الضغط على أي جملة في الأعلى للاستفسار عنها</span>
-                </div>
-            )}
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents as any}>{displayChatText}</ReactMarkdown>
           </div>
         </div>
       </div>
-
-      {isSimplifyModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-xl rounded-3xl overflow-hidden shadow-2xl flex flex-col border border-slate-200 animate-in zoom-in-95 duration-200">
-            <div className="p-5 bg-amber-50 flex justify-between items-center border-b border-amber-100">
-              <div className="flex items-center gap-2 text-amber-700">
-                <Lightbulb size={24} />
-                <h3 className="font-bold text-lg">بسطها لي 💡</h3>
-              </div>
-              <button onClick={() => setIsSimplifyModalOpen(false)} className="p-2 hover:bg-amber-100 rounded-full text-amber-500">
-                <X size={24} />
-              </button>
-            </div>
-            <div className="p-7 overflow-y-auto max-h-[70vh] text-right" dir="rtl">
-              {message.simplifiedText && (
-                <p className="text-slate-800 leading-[2.1] font-medium text-lg md:text-xl">
-                  {cleanMathNotation(message.simplifiedText)}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
