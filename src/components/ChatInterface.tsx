@@ -5,7 +5,7 @@ import { generateStreamResponse, evaluateStudentLevel } from '../services/gemini
 import { MessageBubble } from './MessageBubble';
 import { VideoResult } from '../data/videoData';
 import { getApiKey } from '../utils/apiKeyManager';
-import { Send, Sparkles, ChevronRight, HelpCircle, FileText, Lightbulb, Bot, List, Printer, Mic, Camera, Paperclip, X, AudioLines, StopCircle, BrainCircuit, Globe, BadgePercent, AlertCircle, TrendingUp, Loader2, WifiOff, Clock } from 'lucide-react';
+import { Send, Sparkles, ChevronRight, HelpCircle, FileText, Lightbulb, Bot, List, Printer, Mic, Camera, Paperclip, X, AudioLines, StopCircle, BrainCircuit, Globe, BadgePercent, AlertCircle, TrendingUp, Loader2, WifiOff, Clock, CheckCircle2 } from 'lucide-react';
 
 // Lazy-loaded components
 const LiveVoiceModal = React.lazy(() => import('./LiveVoiceModal').then(module => ({ default: module.LiveVoiceModal })));
@@ -30,7 +30,13 @@ const SUGGESTIONS = [
   { 
     label: '📊 اختبار قياس المستوى الشامل', 
     icon: <BrainCircuit size={18} />, 
-    promptPrefix: 'أريد "اختباراً شاملاً لقياس مستواي الحقيقي" لدرس: [اكتب اسم الدرس]. \nبصفتك خبير مناهج، التزم بالآتي حرفياً:\n1. اعرض الآن مجموعة أسئلة فقط (بدون إجابات) تغطي المنهج كاملاً لهذا الدرس.\n2. نوّع الأسئلة (مباشرة، ذكاء، تطبيقية، صح وخطأ، أكمل، مفاهيم).\n3. غطِّ كل نقطة في الدرس لضمان شمولية الاختبار.\n4. في نهاية الرسالة، اطلب مني بوضوح كتابة "عرض الإجابات" عندما أنتهي.\n5. عندما أكتب "عرض الإجابات"، قدم لي: (الإجابة النموذجية - الكلمات المفتاحية - تنبيهات الأهمية - تقييم مستواي [ضعيف/متوسط/جيد/متفوق] - تحليل نقاط القوة والضعف وأولويات المراجعة).', 
+    promptPrefix: 'أريد "اختباراً شاملاً لقياس مستواي الحقيقي" لدرس: [اكتب اسم الدرس]. \nبصفتك خبير مناهج، التزم بالآتي حرفياً:\n1. اعرض الآن مجموعة أسئلة فقط (بدون إجابات) تغطي المنهج كاملاً لهذا الدرس.\n2. نوّع الأسئلة لتشمل: (أسئلة مباشرة - أسئلة ذكاء وفهم - أسئلة تطبيقية - صح أو خطأ - أكمل - اذكر المعنى - ما المقصود بـ).\n3. غطِّ كل نقطة في المادة بدون استثناء.\n4. اطلب مني بوضوح حل الأسئلة أولاً ثم الضغط على زر "عرض الإجابات النموذجية" الموجود بالأسفل.\n5. الهدف: قياس مستواي الفعلي وإعدادي للتفوق.', 
+    autoSend: false 
+  },
+  { 
+    label: '✅ عرض الإجابات النموذجية', 
+    icon: <CheckCircle2 size={18} />, 
+    promptPrefix: 'أريد الآن "عرض الإجابات النموذجية" للاختبار السابق. \nقم بـ:\n1. عرض الإجابة الصحيحة لكل سؤال مع "الكلمات المفتاحية" للدرجة النهائية.\n2. تنبيهي إذا كان السؤال: (مهم جداً - متكرر - فخ امتحاني).\n3. تقييم مستواي إلى (ضعيف - متوسط - جيد - متفوق) بناءً على نوعية الأسئلة.\n4. تحليل ذكي لنقاط القوة والضعف، وماذا يجب أن أراجع أولاً، وهل مستواي يؤهلني للتفوق أم يحتاج تثبيت؟', 
     autoSend: false 
   },
   { 
@@ -45,7 +51,6 @@ const SUGGESTIONS = [
   { label: 'أهم التوقعات', icon: <Lightbulb size={18} />, promptPrefix: 'ما هي أهم التوقعات في: ', autoSend: false },
   { label: 'أهم نقاط الامتحان', icon: <Sparkles size={18} />, promptPrefix: 'ما هي أهم نقاط الامتحان في: ', autoSend: false },
   { label: 'سؤال MCQ تفاعلي', icon: <HelpCircle size={18} />, promptPrefix: 'أريد سؤال MCQ تفاعلي عن: ', autoSend: false },
-  { label: 'خريطة ذهنية', icon: <BrainCircuit size={18} />, promptPrefix: 'اعمل لي خريطة ذهنية لدرس: ', autoSend: false },
 ];
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, onBack, onSubscribe }) => {
@@ -183,7 +188,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
   const handleQuoteClick = (text: string) => {
     const cleanText = text.substring(0, 150) + (text.length > 150 ? '...' : '');
     setInputValue(`اشرح لي بالتفصيل: "${cleanText}"`);
-    // تأخير بسيط لضمان تحديث الواجهة والتركيز على شريط البحث
     setTimeout(() => {
         if (inputRef.current) {
             inputRef.current.focus();
@@ -193,8 +197,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
   };
 
   const handlePrint = () => window.print();
-  const toggleThinking = () => { setIsThinkingMode(prev => !prev); if (!isThinkingMode) setIsSearchMode(false); };
-  const toggleSearch = () => { setIsSearchMode(prev => !prev); if (!isSearchMode) setIsThinkingMode(false); };
   const handlePlayVideo = (lesson: string, data: VideoResult) => { setCurrentLessonTitle(lesson); setCurrentVideoData(data); setIsVideoModalOpen(true); };
   const handleExplainLesson = (lesson: string) => { setIsLessonBrowserOpen(false); handleSend(`اشرح لي درس "${lesson}" بالتفصيل.`); };
 
@@ -218,7 +220,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
         </Suspense>
       )}
 
-      {/* Offline Indicator */}
       {isOffline && (
         <div className="bg-amber-500 text-white px-4 py-1.5 flex items-center justify-center gap-2 text-xs font-bold animate-in slide-in-from-top duration-300">
           <WifiOff size={14} />
@@ -226,11 +227,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
         </div>
       )}
 
-      {/* File Inputs */}
       <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,application/pdf" />
       <input type="file" ref={cameraInputRef} onChange={handleFileSelect} className="hidden" accept="image/*" capture="environment" />
 
-      {/* Header */}
       <header className="bg-white border-b border-slate-200 px-3 py-3 flex justify-between items-center shadow-sm gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-full"><ChevronRight size={24} /></button>
@@ -250,17 +249,23 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
         </div>
       </header>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-4 scrollbar-hide">
         {messages.map(msg => <div key={msg.id}><MessageBubble message={msg} subject={subject} onQuote={handleQuoteClick} /></div>)}
         {isLoading && <div className="flex justify-start"><div className="bg-white border px-5 py-4 rounded-3xl shadow-sm flex items-center gap-3"><Bot size={20} className="text-indigo-600 animate-pulse" /><span className="text-xs text-indigo-500 font-bold">لحظات، أقوم بتحضير إجابتك...</span></div></div>}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Suggestions */}
-      {!isLoading && !attachment && <div className="px-3 py-2 flex flex-wrap gap-2 justify-center">{SUGGESTIONS.map((s, i) => <button key={i} onClick={() => handleSuggestionClick(s)} className="flex items-center gap-2 bg-white border px-4 py-2 rounded-2xl text-xs font-bold transition-all hover:scale-105 active:scale-95"><span className="text-indigo-500">{s.icon}</span>{s.label}</button>)}</div>}
+      {!isLoading && !attachment && (
+        <div className="px-3 py-2 flex flex-wrap gap-2 justify-center">
+          {SUGGESTIONS.map((s, i) => (
+            <button key={i} onClick={() => handleSuggestionClick(s)} className="flex items-center gap-2 bg-white border px-4 py-2 rounded-2xl text-xs font-bold transition-all hover:scale-105 active:scale-95 shadow-sm border-slate-100">
+              <span className="text-indigo-500">{s.icon}</span>
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {/* Attachment Preview */}
       {attachment && <div className="px-5 py-3 bg-slate-100 border-t flex items-center justify-between">
         <div className="flex items-center gap-4">
           {attachment.type === 'image' ? <img src={`data:${attachment.mimeType};base64,${attachment.data}`} className="h-14 w-14 object-cover rounded-xl border-2 border-indigo-200" /> : <div className="h-14 w-14 flex items-center justify-center rounded-xl border-2">{attachment.type === 'audio' ? <Mic size={24} /> : <FileText size={24} />}</div>}
@@ -269,9 +274,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
         <button onClick={() => setAttachment(null)} className="p-2 rounded-full hover:rotate-90"><X size={20} /></button>
       </div>}
 
-      {/* Input Area */}
       <div className="p-3 bg-white border-t flex items-end gap-2">
-        <textarea ref={inputRef} value={inputValue} onChange={e => setInputValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} placeholder={isRecording ? "جاري التسجيل..." : isThinkingMode ? "اكتب مسألة صعبة..." : isSearchMode ? "ابحث عن معلومة..." : "اكتب سؤالك هنا..."} className="flex-1 bg-slate-50 border rounded-2xl px-4 py-3.5 resize-none h-[56px] focus:ring-2 focus:ring-indigo-200 outline-none transition-all" disabled={isRecording} />
+        <textarea ref={inputRef} value={inputValue} onChange={e => setInputValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} placeholder={isRecording ? "جاري التسجيل..." : "اكتب سؤالك هنا..."} className="flex-1 bg-slate-50 border rounded-2xl px-4 py-3.5 resize-none h-[56px] focus:ring-2 focus:ring-indigo-200 outline-none transition-all" disabled={isRecording} />
         <button onClick={handleRecordToggle} className={`${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-100 text-slate-500'} p-3 rounded-2xl transition-all active:scale-90`}><Mic size={24} /></button>
         <button onClick={() => handleSend()} disabled={(!inputValue.trim() && !attachment) || isLoading || isRecording} className={`${(inputValue.trim() || attachment) && !isLoading ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-200 text-slate-400'} p-3 rounded-2xl transition-all active:scale-95`}><Send size={24} /></button>
       </div>
