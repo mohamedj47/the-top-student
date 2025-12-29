@@ -5,7 +5,7 @@ import { generateStreamResponse, evaluateStudentLevel } from '../services/gemini
 import { MessageBubble } from './MessageBubble';
 import { VideoResult } from '../data/videoData';
 import { getApiKey } from '../utils/apiKeyManager';
-import { Send, Sparkles, ChevronRight, HelpCircle, FileText, Lightbulb, Bot, List, Printer, Mic, Camera, Paperclip, X, AudioLines, StopCircle, BrainCircuit, Globe, BadgePercent, AlertCircle, TrendingUp, Loader2, WifiOff } from 'lucide-react';
+import { Send, Sparkles, ChevronRight, HelpCircle, FileText, Lightbulb, Bot, List, Printer, Mic, Camera, Paperclip, X, AudioLines, StopCircle, BrainCircuit, Globe, BadgePercent, AlertCircle, TrendingUp, Loader2, WifiOff, Clock } from 'lucide-react';
 
 // Lazy-loaded components
 const LiveVoiceModal = React.lazy(() => import('./LiveVoiceModal').then(module => ({ default: module.LiveVoiceModal })));
@@ -27,6 +27,7 @@ interface ChatInterfaceProps {
 }
 
 const SUGGESTIONS = [
+  { label: '📝 مراجعة ليلة الامتحان', icon: <Clock size={18} />, promptPrefix: 'أريد "مراجعة ليلة الامتحان" مركزة جداً لدرس: [اكتب اسم الدرس هنا]. \nالتزم بالترتيب التالي حرفياً وبدون حشو:\n1️⃣ أهم المفاهيم الأساسية (تعريفات مختصرة جداً).\n2️⃣ أهم القوانين أو النقاط الحتمية التي لا يخرج عنها الامتحان.\n3️⃣ أكثر الأسئلة المتوقعة تكراراً بصيغة الامتحان.\n4️⃣ أخطاء شائعة يقع فيها الطلاب وتصحيحها.\n5️⃣ تنبيهات ليلة الامتحان (احفظ – انتبه – لا تخلط – ركّز).\n6️⃣ فقرة "لو معاك 30 دقيقة بس، تذاكر إيه؟" (ترتيب أولويات).\nالأسلوب: نقاط مختصرة، لغة بسيطة، مناسبة للمراجعة السريعة.', autoSend: false },
   { label: 'اختر درساً للشرح', icon: <List size={18} />, promptPrefix: 'LESSON_BROWSER_TRIGGER', autoSend: false },
   { label: 'أسئلة تدريبية', icon: <HelpCircle size={18} />, promptPrefix: 'أعطني أسئلة تدريبية عن: ', autoSend: false },
   { label: 'لخص المفهوم', icon: <FileText size={18} />, promptPrefix: 'لخص لي موضوع: ', autoSend: false },
@@ -261,7 +262,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
       {/* Input Area */}
       <div className="p-3 bg-white border-t flex items-end gap-2">
         <textarea ref={inputRef} value={inputValue} onChange={e => setInputValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} placeholder={isRecording ? "جاري التسجيل..." : isThinkingMode ? "اكتب مسألة صعبة..." : isSearchMode ? "ابحث عن معلومة..." : "اكتب سؤالك هنا..."} className="flex-1 bg-slate-50 border rounded-2xl px-4 py-3.5 resize-none h-[56px] focus:ring-2 focus:ring-indigo-200 outline-none transition-all" disabled={isRecording} />
-        <button onClick={handleRecordToggle} className={`${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-100 text-slate-500'} p-3 rounded-2xl transition-all active:scale-95`}><Mic size={24} /></button>
+        <button onClick={handleRecordToggle} className={`${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-100 text-slate-500'} p-3 rounded-2xl transition-all active:scale-90`}><Mic size={24} /></button>
         <button onClick={() => handleSend()} disabled={(!inputValue.trim() && !attachment) || isLoading || isRecording} className={`${(inputValue.trim() || attachment) && !isLoading ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-200 text-slate-400'} p-3 rounded-2xl transition-all active:scale-95`}><Send size={24} /></button>
       </div>
     </div>
