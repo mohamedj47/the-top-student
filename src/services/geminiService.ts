@@ -2,9 +2,6 @@
 import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender, PerformanceMetrics } from "../types";
 import { questionsBank, StaticQuestion } from "../lib/questionsBank";
 
-/**
- * البحث في البنك المحلي لتقليل الضغط على الـ AI
- */
 export function searchInStaticBank(query: string): StaticQuestion | null {
   if (!query) return null;
   const normalizedQuery = query.trim().toLowerCase();
@@ -19,9 +16,6 @@ export function cleanMathNotation(text: string): string {
   return text.replace(/\$/g, '');
 }
 
-/**
- * دالة التوليد الرئيسية - تتواصل مع Vercel Backend فقط
- */
 export async function generateStreamResponse(
   userMessage: string,
   grade: GradeLevel,
@@ -34,7 +28,7 @@ export async function generateStreamResponse(
 ): Promise<string> {
   
   if (!navigator.onLine) {
-    onChunk("أنت تعمل حالياً بدون إنترنت. جاري جلب المعلومات من الذاكرة المحلية...");
+    onChunk("أنت الآن في وضع الأوفلاين. سأبحث لك في الذاكرة المحلية...");
     return "Offline";
   }
 
@@ -51,32 +45,35 @@ export async function generateStreamResponse(
       }),
     });
 
+    const data = await response.json().catch(() => null);
+    
     if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Request failed');
+      const errorMsg = data?.error || 'خطأ في الاتصال بالخادم';
+      onChunk(errorMsg);
+      throw new Error(errorMsg);
     }
 
-    const fullText = await response.text();
+    // إذا كانت الاستجابة نصية مباشرة (من الكاش)
+    const fullText = typeof data === 'string' ? data : (data?.text || "");
     
-    // محاكاة الـ Streaming لتحسين تجربة المستخدم (Typing Effect)
+    // تأثير الكتابة التدريجي السريع جداً
     let current = "";
     const words = fullText.split(' ');
     for (let i = 0; i < words.length; i++) {
       current += words[i] + ' ';
       onChunk(cleanMathNotation(current));
-      if (i % 2 === 0) await new Promise(r => setTimeout(r, 10)); 
+      if (i % 5 === 0) await new Promise(r => setTimeout(r, 5)); 
     }
 
     return fullText;
   } catch (error: any) {
-    const msg = error.message || "حدث خطأ في الاتصال بالخادم.";
+    const msg = error.message || "حدث خطأ غير متوقع. جرب مرة أخرى.";
     onChunk(msg);
     return msg;
   }
 }
 
 export async function evaluateStudentLevel(history: Message[], subject: Subject): Promise<PerformanceMetrics | null> {
-  // التحليل يتم عبر الـ Backend لضمان الأمان
   return null; 
 }
 
@@ -100,10 +97,6 @@ export function decodeBase64(base64: string): Uint8Array {
   return bytes;
 }
 
-/**
- * فك تشفير البيانات الصوتية بصيغة PCM باتباع إرشادات Gemini API
- * Fix: Added sampleRate and numChannels parameters to match usage in MessageBubble.tsx
- */
 export async function decodePcmAudio(
   data: Uint8Array,
   ctx: AudioContext,
@@ -113,7 +106,6 @@ export async function decodePcmAudio(
   const dataInt16 = new Int16Array(data.buffer);
   const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
