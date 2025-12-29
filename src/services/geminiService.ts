@@ -1,16 +1,9 @@
 
 import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender, PerformanceMetrics } from "../types";
-// Import static questions bank data for local search capability
 import { questionsBank, StaticQuestion } from "../lib/questionsBank";
 
-export function cleanMathNotation(text: string): string {
-  if (!text) return "";
-  return text.replace(/\$/g, '');
-}
-
 /**
- * دالة البحث في البنك الثابت للأسئلة لضمان استجابة فورية ومجانية
- * @param query نص السؤال المراد البحث عنه
+ * البحث في البنك المحلي لتقليل الضغط على الـ AI
  */
 export function searchInStaticBank(query: string): StaticQuestion | null {
   if (!query) return null;
@@ -21,9 +14,13 @@ export function searchInStaticBank(query: string): StaticQuestion | null {
   ) || null;
 }
 
+export function cleanMathNotation(text: string): string {
+  if (!text) return "";
+  return text.replace(/\$/g, '');
+}
+
 /**
- * دالة توليد الرد المحدثة - الآن تتصل بـ Vercel Backend
- * تدعم 10,000 مستخدم متزامن عبر الكاش والـ Rate Limiting في الخادم
+ * دالة التوليد الرئيسية - تتواصل مع Vercel Backend فقط
  */
 export async function generateStreamResponse(
   userMessage: string,
@@ -36,75 +33,60 @@ export async function generateStreamResponse(
   deviceId?: string
 ): Promise<string> {
   
-  // التحقق من الأوفلاين (لا يتغير)
   if (!navigator.onLine) {
     onChunk("أنت تعمل حالياً بدون إنترنت. جاري جلب المعلومات من الذاكرة المحلية...");
-    // ... منطق البحث المحلي ...
-    return "Offline Mode";
+    return "Offline";
   }
 
   try {
-    // تنسيق السجل للـ API
-    const formattedHistory = history.slice(-5).map(msg => ({
-      role: msg.sender === Sender.USER ? 'user' : 'model',
-      parts: [{ text: msg.text }]
-    }));
-
-    // الاتصال بالـ Backend الموحد
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: userMessage,
-        history: formattedHistory,
+        history: history.slice(-5).map(m => ({ role: m.sender === Sender.USER ? 'user' : 'model', parts: [{ text: m.text }] })),
         grade,
         subject,
-        deviceId: deviceId || 'unknown_student'
+        deviceId: deviceId || 'anonymous'
       }),
     });
 
     if (!response.ok) {
-      const errData = await response.json();
-      throw new Error(errData.error || 'Request failed');
+      const data = await response.json();
+      throw new Error(data.error || 'Request failed');
     }
 
-    // ملاحظة: الـ Edge Functions تدعم الـ Streaming ولكن للتبسيط والثبات مع الكاش
-    // سنستقبل النص كاملاً ونحاكي الـ Typing Effect لراحة العين
-    const text = await response.text();
-    let currentText = "";
-    const words = text.split(" ");
+    const fullText = await response.text();
     
+    // محاكاة الـ Streaming لتحسين تجربة المستخدم (Typing Effect)
+    let current = "";
+    const words = fullText.split(' ');
     for (let i = 0; i < words.length; i++) {
-      currentText += words[i] + " ";
-      onChunk(cleanMathNotation(currentText));
-      // محاكاة سرعة الكتابة (توفير تجربة UX ممتازة)
-      if (i % 3 === 0) await new Promise(r => setTimeout(r, 10));
+      current += words[i] + ' ';
+      onChunk(cleanMathNotation(current));
+      if (i % 2 === 0) await new Promise(r => setTimeout(r, 10)); 
     }
 
-    return text;
-
+    return fullText;
   } catch (error: any) {
-    console.error("Fetch Error:", error);
-    const errorMsg = error.message || "حدث خطأ في الاتصال بالمعلم الذكي.";
-    onChunk(errorMsg);
-    return errorMsg;
+    const msg = error.message || "حدث خطأ في الاتصال بالخادم.";
+    onChunk(msg);
+    return msg;
   }
 }
 
-// الدوال الأخرى (evaluateStudentLevel, generateAiSpeech) تبقى كما هي أو تنقل للـ API لاحقاً
 export async function evaluateStudentLevel(history: Message[], subject: Subject): Promise<PerformanceMetrics | null> {
-    // هذا الجزء يمكن تركه حالياً أو نقله لـ /api/evaluate لزيادة الأمان
-    return null; // سيتم تفعيله من الـ Backend في التحديث القادم
+  // التحليل يتم عبر الـ Backend لضمان الأمان
+  return null; 
 }
 
 export async function generateAiSpeech(text: string): Promise<any> {
-    // يتم استدعاؤه فقط عند ضغط الطالب على زر "استمع" لتقليل الحمل
-    const response = await fetch('/api/voice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
-    });
-    return response.ok ? await response.blob() : null;
+  const response = await fetch('/api/voice', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text })
+  });
+  return response.ok ? { data: await response.blob() } : null;
 }
 
 export function sanitizeForSpeech(text: string): string {
@@ -113,18 +95,25 @@ export function sanitizeForSpeech(text: string): string {
 
 export function decodeBase64(base64: string): Uint8Array {
   const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
   return bytes;
 }
 
-export async function decodePcmAudio(data: Uint8Array, ctx: AudioContext, sampleRate: number = 24000, numChannels: number = 1): Promise<AudioBuffer> {
+/**
+ * فك تشفير البيانات الصوتية بصيغة PCM باتباع إرشادات Gemini API
+ * Fix: Added sampleRate and numChannels parameters to match usage in MessageBubble.tsx
+ */
+export async function decodePcmAudio(
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number = 24000,
+  numChannels: number = 1
+): Promise<AudioBuffer> {
   const dataInt16 = new Int16Array(data.buffer);
   const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
@@ -135,8 +124,8 @@ export async function decodePcmAudio(data: Uint8Array, ctx: AudioContext, sample
 }
 
 export async function streamSpeech(text: string, onComplete?: () => void): Promise<void> {
-  // استخدام الـ Native Speech API كبديل مجاني وسريع جداً للـ 10,000 طالب
   if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(sanitizeForSpeech(text));
   utterance.lang = 'ar-EG';
   utterance.onend = onComplete || null;
