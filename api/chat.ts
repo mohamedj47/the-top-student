@@ -1,178 +1,74 @@
+
 import { GoogleGenAI } from "@google/genai";
 
-/**
- * تشغيل على Edge Runtime (Vercel)
- */
 export const config = {
   runtime: "edge",
 };
 
-/**
- * ===============================
- * Cache (In-Memory – Edge Safe)
- * ===============================
- */
-const CACHE_TTL = 1000 * 60 * 60; // ساعة
+// كاش محلي على مستوى الـ Edge Node لتوفير التكلفة
 const cache = new Map<string, { value: string; ts: number }>();
+const CACHE_TTL = 1000 * 60 * 60; // ساعة واحدة
 
-/**
- * ===============================
- * Rate Limit (Soft – Edge Friendly)
- * ===============================
- */
-const RATE_LIMIT_WINDOW = 60_000; // دقيقة
-const RATE_LIMIT_MAX = 5;
+// تحديد معدل الطلبات لكل جهاز (deviceId)
 const rateMap = new Map<string, { count: number; reset: number }>();
+const LIMIT = 5;
+const WINDOW = 60000;
 
-/**
- * ===============================
- * Helpers
- * ===============================
- */
-function getClientKey(req: Request, deviceId?: string) {
-  const h = req.headers;
-  const ip =
-    h.get("x-forwarded-for")?.split(",")[0] ||
-    h.get("cf-connecting-ip") ||
-    "unknown-ip";
-
-  return `${deviceId || "anon"}_${ip}`;
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error("AI_TIMEOUT")),
-      ms
-    );
-
-    promise
-      .then((res) => {
-        clearTimeout(timer);
-        resolve(res);
-      })
-      .catch((err) => {
-        clearTimeout(timer);
-        reject(err);
-      });
-  });
-}
-
-/**
- * ===============================
- * API Handler
- * ===============================
- */
 export default async function handler(req: Request) {
-  if (req.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405 });
-  }
+  if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
   try {
-    const body = await req.json();
-    const { message, history = [], grade, subject, deviceId } = body;
-
-    if (!message || typeof message !== "string") {
-      return new Response(
-        JSON.stringify({ error: "طلب غير صالح" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
+    const { message, history, grade, subject, deviceId } = await req.json();
     const now = Date.now();
-    const clientKey = getClientKey(req, deviceId);
 
-    /**
-     * ---------- Rate Limit ----------
-     */
-    const limit =
-      rateMap.get(clientKey) || {
-        count: 0,
-        reset: now + RATE_LIMIT_WINDOW,
-      };
+    // 1. Rate Limiting Layer
+    const userLimit = rateMap.get(deviceId) || { count: 0, reset: now + WINDOW };
+    if (now > userLimit.reset) {
+      userLimit.count = 0;
+      userLimit.reset = now + WINDOW;
+    }
+    if (userLimit.count >= LIMIT) {
+      return new Response(JSON.stringify({ error: "هدّي السرعة شوية يا بطل! 5 طلبات بس في الدقيقة." }), { 
+        status: 429, headers: { "Content-Type": "application/json" } 
+      });
+    }
+    userLimit.count++;
+    rateMap.set(deviceId, userLimit);
 
-    if (now > limit.reset) {
-      limit.count = 0;
-      limit.reset = now + RATE_LIMIT_WINDOW;
+    // 2. Cache Layer (In-Memory)
+    const cacheKey = `${subject}_${grade}_${message.trim().toLowerCase()}`;
+    if (cache.has(cacheKey)) {
+      const entry = cache.get(cacheKey)!;
+      if (now - entry.ts < CACHE_TTL) return new Response(entry.value);
     }
 
-    if (limit.count >= RATE_LIMIT_MAX) {
-      return new Response(
-        JSON.stringify({
-          error: "أنت سريع جداً، حاول مرة أخرى بعد دقيقة.",
-        }),
-        { status: 429, headers: { "Content-Type": "application/json" } }
-      );
-    }
+    // 3. AI Execution (Server-Side Only)
+    // Always use process.env.API_KEY directly as per guidelines
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Use allowed model gemini-3-flash-preview instead of prohibited gemini-1.5-flash
+    const model = "gemini-3-flash-preview"; 
 
-    limit.count++;
-    rateMap.set(clientKey, limit);
+    const systemInstruction = `أنت "المعلم الذكي" لطلاب الثانوية بمصر. مادة ${subject} للصف ${grade}.
+    اشرح بلهجة مصرية مبسطة. استخدم جداول Markdown دائماً لتنظيم المعلومات. ابدأ بكلمة "تمام".`;
 
-    /**
-     * ---------- Cache ----------
-     */
-    const cacheKey = JSON.stringify({
-      subject,
-      grade,
-      message: message.trim().toLowerCase(),
+    const result = await ai.models.generateContent({
+      model: model,
+      contents: [...history, { role: "user", parts: [{ text: message }] }],
+      config: { systemInstruction, temperature: 0.7 }
     });
 
-    const cached = cache.get(cacheKey);
-    if (cached && now - cached.ts < CACHE_TTL) {
-      return new Response(cached.value);
-    }
+    // Access .text property directly (not a method) as per guidelines
+    const output = result.text || "عذراً، لم أتمكن من استيعاب السؤال حالياً.";
+    
+    // حفظ في الكاش قبل الرد
+    cache.set(cacheKey, { value: output, ts: now });
 
-    /**
-     * ---------- Gemini ----------
-     */
-    const ai = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY!,
-    });
-
-    const systemInstruction = `
-أنت المعلم الذكي لطلاب الثانوية العامة في مصر.
-اشرح بهدوء وبأسلوب مبسط وبلهجة مصرية تعليمية.
-ابدأ الرد بكلمة "تمام".
-استخدم Markdown وجداول عند الحاجة.
-أنت تشرح مادة ${subject} للصف ${grade}.
-`;
-
-    const result = await withTimeout(
-      ai.models.generateContent({
-        model: "gemini-1.5-flash",
-        contents: [
-          ...history,
-          { role: "user", parts: [{ text: message }] },
-        ],
-        config: {
-          systemInstruction,
-          temperature: 0.7,
-        },
-      }),
-      12_000 // 12 ثانية Timeout
-    );
-
-    const text =
-      result.text || "تمام، خلّينا نعيد الشرح بطريقة أبسط.";
-
-    /**
-     * ---------- Save Cache ----------
-     */
-    cache.set(cacheKey, { value: text, ts: now });
-
-    return new Response(text);
+    return new Response(output);
 
   } catch (error: any) {
-    console.error("API Error:", error);
-
-    const msg =
-      error?.message === "AI_TIMEOUT"
-        ? "الشرح بياخد وقت أطول من المعتاد، حاول تاني."
-        : "حصل ضغط على المعلم الذكي، حاول بعد لحظة.";
-
-    return new Response(
-      JSON.stringify({ error: msg }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    console.error("Backend Error:", error);
+    return new Response(JSON.stringify({ error: "المعلم مشغول حالياً مع 10,000 طالب، حاول كمان دقيقة." }), { 
+      status: 500, headers: { "Content-Type": "application/json" } 
+    });
   }
 }
