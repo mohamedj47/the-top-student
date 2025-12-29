@@ -1,82 +1,84 @@
-
 import { GoogleGenAI } from "@google/genai";
 
 export const config = {
-  runtime: 'edge',
+  runtime: "edge",
 };
 
-// طبقة الكاش البسيطة (In-Memory) - تعمل بكفاءة على مستوى الـ Edge Node
-const cache = new Map<string, { response: string; timestamp: number }>();
-const CACHE_TTL = 1000 * 60 * 60; // ساعة واحدة
+const CACHE_TTL = 1000 * 60 * 60; // ساعة
+const cache = new Map<string, { value: string; ts: number }>();
 
-// طبقة تحديد معدل الطلبات (Rate Limiter)
-const rateLimit = new Map<string, { count: number; resetTime: number }>();
+function getClientKey(req: Request, deviceId?: string) {
+  const h = req.headers;
+  const ip =
+    h.get("x-forwarded-for")?.split(",")[0] ||
+    h.get("cf-connecting-ip") ||
+    "unknown";
+  return `${deviceId || "anon"}_${ip}`;
+}
 
 export default async function handler(req: Request) {
-  if (req.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 });
+  if (req.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
   }
 
   try {
-    const { message, history, grade, subject, deviceId } = await req.json();
+    const body = await req.json();
+    const { message, history, grade, subject, deviceId } = body;
 
-    // 1. تطبيق الـ Rate Limiting (5 طلبات لكل دقيقة)
+    const clientKey = getClientKey(req, deviceId);
     const now = Date.now();
-    const userLimit = rateLimit.get(deviceId) || { count: 0, resetTime: now + 60000 };
-    
-    if (now > userLimit.resetTime) {
-      userLimit.count = 0;
-      userLimit.resetTime = now + 60000;
+
+    // ---------- Cache ----------
+    const cacheKey = JSON.stringify({
+      subject,
+      grade,
+      message: message.trim().toLowerCase(),
+    });
+
+    const cached = cache.get(cacheKey);
+    if (cached && now - cached.ts < CACHE_TTL) {
+      return new Response(cached.value);
     }
 
-    if (userLimit.count >= 5) {
-      return new Response(JSON.stringify({ error: 'أنت سريع جداً! خذ نفساً عميقاً وحاول بعد دقيقة.' }), { 
-        status: 429,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-    userLimit.count++;
-    rateLimit.set(deviceId, userLimit);
+    // ---------- Timeout ----------
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
 
-    // 2. التحقق من الكاش (بناءً على السؤال والمادة)
-    const cacheKey = `${subject}_${grade}_${message.trim().toLowerCase()}`;
-    if (cache.has(cacheKey)) {
-      const cached = cache.get(cacheKey)!;
-      if (now - cached.timestamp < CACHE_TTL) {
-        return new Response(cached.response);
-      }
-    }
+    // ---------- AI ----------
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY!,
+    });
 
-    // 3. استدعاء Gemini (Gemini 3 Flash للأداء العالي)
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-    
     const systemInstruction = `
-      أنت "المعلم الذكي" لطلاب الثانوية العامة بمصر.
-      تحدث بلهجة مصرية تعليمية هادئة. رد في جداول Markdown دائماً. ابدأ بكلمة "تمام".
-      أنت تشرح الآن مادة ${subject} للصف ${grade}.
-    `;
+أنت المعلم الذكي لطلاب الثانوية العامة بمصر.
+اشرح بهدوء وبأسلوب مبسط وبلهجة مصرية تعليمية.
+ابدأ الرد بكلمة "تمام".
+استخدم Markdown وجداول عند الحاجة.
+أنت تشرح مادة ${subject} للصف ${grade}.
+`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: [...history, { role: 'user', parts: [{ text: message }] }],
+    const result = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: [...history, { role: "user", parts: [{ text: message }] }],
       config: {
         systemInstruction,
         temperature: 0.7,
       },
+      signal: controller.signal,
     });
 
-    const fullText = response.text || "عذراً، لم أستطع توليد رد.";
+    clearTimeout(timeout);
 
-    // 4. حفظ في الكاش
-    cache.set(cacheKey, { response: fullText, timestamp: now });
+    const text = result.text || "تمام، خلّينا نحاول بصيغة أبسط.";
 
-    return new Response(fullText);
+    cache.set(cacheKey, { value: text, ts: now });
 
-  } catch (error: any) {
-    console.error('Backend Error:', error);
-    return new Response(JSON.stringify({ error: 'حدث خطأ في عقل المعلم الذكي. حاول لاحقاً.' }), { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return new Response(text);
+
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ error: "حصل ضغط على المعلم الذكي، حاول بعد لحظة." }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
   }
 }
