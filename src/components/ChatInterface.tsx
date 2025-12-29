@@ -28,21 +28,21 @@ interface ChatInterfaceProps {
 
 const SUGGESTIONS = [
   { 
-    label: '🎁 مذكرة ليلة الامتحان الشاملة', 
+    label: '📝 مذكرة ليلة الامتحان الشاملة', 
     icon: <Sparkles size={18} className="text-amber-500" />, 
-    promptPrefix: 'بصفتك خبير المناهج ومحلل امتحانات الثانوية العامة، أريد "مذكرة ليلة الامتحان" لمادة: [اكتب اسم المادة]. \nيجب أن تكون المراجعة شاملة لكل شيء "من الواضح لما بين السطور" وتشمل الآتي حرفياً:\n\n1️⃣ الخلاصة: أهم المفاهيم والنظريات لكل فصل أو وحدة بتركيز عالٍ.\n2️⃣ أهم النقاط: كل التفاصيل التي يركز عليها واضعو الامتحان (فنيات ما بين السطور).\n3️⃣ أمثلة عملية: مثال أو اثنين لكل نوع سؤال مهم بالخطوات.\n4️⃣ أسئلة محلولة: من 5 إلى 10 أسئلة نموذجية مع حلول مختصرة واضحة.\n5️⃣ ملخص سريع (قبل اللجنة): صفحة واحدة لكل فصل بأهم القوانين والنقاط الذهبية.\n\nالتنسيق: استخدم جداول Markdown المنظمة والرموز التعبيرية لسهولة المراجعة السريعة.', 
+    promptPrefix: 'بصفتك كبير خبراء المناهج ومحلل امتحانات الثانوية العامة، قم بإنشاء "مذكرة ليلة الامتحان الشاملة" لدرس: [اكتب اسم الدرس]. \nيجب أن تشمل المذكرة كل شيء "من الواضح لما بين السطور" وبالتنسيق التالي حرفياً:\n\n1️⃣ الخلاصة: أهم المفاهيم والنظريات لهذا الجزء بشكل مركز جداً.\n2️⃣ أهم النقاط: كل النقاط التي يركز عليها واضعو الامتحان (الفنيات والتكات).\n3️⃣ أمثلة عملية: مثال أو اثنين لكل نوع سؤال مهم مع شرح خطوات الحل.\n4️⃣ أسئلة محلولة: من 5 إلى 10 أسئلة نموذجية مع حلول مختصرة وسهلة الفهم.\n5️⃣ ملخص سريع (قبل اللجنة): صفحة الـ 60 ثانية التي تشمل أهم القوانين والكلمات المفتاحية.\n\nالتنسيق: استخدم جداول Markdown والرموز التعبيرية واجعل اللهجة مصرية تعليمية محفزة.', 
     autoSend: false 
   },
   { 
     label: '📊 اختبار قياس المستوى الشامل', 
     icon: <BrainCircuit size={18} />, 
-    promptPrefix: 'أريد "اختباراً شاملاً لقياس مستواي الحقيقي" لدرس: [اكتب اسم الدرس]. \nبصفتك خبير مناهج، التزم بالآتي حرفياً:\n1. اعرض الآن مجموعة أسئلة فقط (بدون إجابات) تغطي المنهج كاملاً لهذا الدرس.\n2. نوّع الأسئلة لتشمل: (أسئلة مباشرة - أسئلة ذكاء وفهم - أسئلة تطبيقية - صح أو خطأ - أكمل - اذكر المعنى - ما المقصود بـ).\n3. غطِّ كل نقطة في المادة بدون استثناء.\n4. اطلب مني بوضوح حل الأسئلة أولاً ثم الضغط على زر "عرض الإجابات النموذجية" الموجود بالأسفل.\n5. الهدف: قياس مستواي الفعلي وإعدادي للتفوق.', 
+    promptPrefix: 'أريد "اختباراً شاملاً لقياس مستواي الحقيقي" لدرس: [اكتب اسم الدرس]. \nبصفتك خبير مناهج، التزم بالآتي حرفياً:\n1. اعرض الآن مجموعة أسئلة فقط (بدون إجابات) تغطي المنهج كامل لهذا الدرس.\n2. نوّع الأسئلة لتشمل (اختياري، مقالي، فنيات).\n3. اطلب مني الحل أولاً ثم كتابة "عرض الإجابات" للتقييم.', 
     autoSend: false 
   },
   { 
     label: '✅ عرض الإجابات النموذجية', 
     icon: <CheckCircle2 size={18} />, 
-    promptPrefix: 'أريد الآن "عرض الإجابات النموذجية" للاختبار السابق. \nقم بـ:\n1. عرض الإجابة الصحيحة لكل سؤال مع "الكلمات المفتاحية" للدرجة النهائية.\n2. تنبيهي إذا كان السؤال: (مهم جداً - متكرر - فخ امتحاني).\n3. تقييم مستواي إلى (ضعيف - متوسط - جيد - متفوق) بناءً على نوعية الأسئلة.\n4. تحليل ذكي لنقاط القوة والضعف، وماذا يجب أن أراجع أولاً، وهل مستواي يؤهلني للتفوق أم يحتاج تثبيت؟', 
+    promptPrefix: 'أريد الآن "عرض الإجابات النموذجية" للاختبار السابق مع تحليل مستواي (ضعيف/متوسط/جيد/متفوق) وتوضيح نقاط القوة والضعف.', 
     autoSend: false 
   },
   { label: 'اختر درساً للشرح', icon: <List size={18} />, promptPrefix: 'LESSON_BROWSER_TRIGGER', autoSend: false },
@@ -112,48 +112,70 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
     finally { setIsEvaluating(false); }
   };
 
-  const processFile = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64String = (e.target?.result as string).split(',')[1];
-      const mimeType = file.type;
-      let type: 'image' | 'file' = 'file';
-      if (mimeType.startsWith('image/')) type = 'image';
-      setAttachment({ type, mimeType, data: base64String, name: file.name });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) processFile(e.target.files[0]);
-    e.target.value = '';
-  };
-
+  /**
+   * دالة للتعامل مع تسجيل الصوت
+   */
   const handleRecordToggle = async () => {
     if (isRecording) {
-      mediaRecorderRef.current?.stop();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
       setIsRecording(false);
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      const audioChunks: Blob[] = [];
-      mediaRecorder.ondataavailable = (event) => audioChunks.push(event.data);
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = () => {
-          const base64String = (reader.result as string).split(',')[1];
-          setAttachment({ type: 'audio', mimeType: 'audio/mp3', data: base64String, name: 'تسجيل صوتي' });
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+        const chunks: Blob[] = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(chunks, { type: 'audio/webm' });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64data = (reader.result as string).split(',')[1];
+            setAttachment({
+              type: 'audio',
+              mimeType: 'audio/webm',
+              data: base64data,
+              name: `صوت_${new Date().toLocaleTimeString('ar-EG')}.webm`
+            });
+          };
+          reader.readAsDataURL(blob);
           stream.getTracks().forEach(track => track.stop());
         };
-      };
-      mediaRecorder.start();
-      setIsRecording(true);
-    } catch (err) { console.error("Error accessing mic:", err); alert("لا يمكن الوصول للميكروفون."); }
+
+        mediaRecorder.start();
+        setIsRecording(true);
+      } catch (err) {
+        console.error("Mic access error:", err);
+        alert("لم نتمكن من الوصول للميكروفون. يرجى التحقق من الأذونات.");
+      }
+    }
+  };
+
+  /**
+   * دالة للتعامل مع اختيار الملفات والصور
+   */
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'file') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = (reader.result as string).split(',')[1];
+      setAttachment({
+        type,
+        mimeType: file.type,
+        data: base64,
+        name: file.name
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = ''; // Reset input to allow selecting same file again
   };
 
   const handleSend = async (text: string = inputValue) => {
@@ -225,9 +247,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
         </div>
       )}
 
-      <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,application/pdf" />
-      <input type="file" ref={cameraInputRef} onChange={handleFileSelect} className="hidden" accept="image/*" capture="environment" />
-
       <header className="bg-white border-b border-slate-200 px-3 py-3 flex justify-between items-center shadow-sm gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-full"><ChevronRight size={24} /></button>
@@ -273,7 +292,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
       </div>}
 
       <div className="p-3 bg-white border-t flex items-end gap-2">
+        <input type="file" ref={fileInputRef} className="hidden" accept="*/*" onChange={(e) => handleFileSelect(e, 'file')} />
+        <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={(e) => handleFileSelect(e, 'image')} />
+        
+        <button onClick={() => cameraInputRef.current?.click()} className="p-3 text-slate-500 hover:text-indigo-600 transition-all active:scale-90"><Camera size={24} /></button>
+        <button onClick={() => fileInputRef.current?.click()} className="p-3 text-slate-500 hover:text-indigo-600 transition-all active:scale-90"><Paperclip size={24} /></button>
+        
         <textarea ref={inputRef} value={inputValue} onChange={e => setInputValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} placeholder={isRecording ? "جاري التسجيل..." : "اكتب سؤالك هنا..."} className="flex-1 bg-slate-50 border rounded-2xl px-4 py-3.5 resize-none h-[56px] focus:ring-2 focus:ring-indigo-200 outline-none transition-all" disabled={isRecording} />
+        
         <button onClick={handleRecordToggle} className={`${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-100 text-slate-500'} p-3 rounded-2xl transition-all active:scale-90`}><Mic size={24} /></button>
         <button onClick={() => handleSend()} disabled={(!inputValue.trim() && !attachment) || isLoading || isRecording} className={`${(inputValue.trim() || attachment) && !isLoading ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-200 text-slate-400'} p-3 rounded-2xl transition-all active:scale-95`}><Send size={24} /></button>
       </div>
