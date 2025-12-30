@@ -2,7 +2,7 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const config = {
-  runtime: "edge",
+  runtime: "edge", 
 };
 
 // كاش محلي سريع جداً للأسئلة الشائعة
