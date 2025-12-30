@@ -5,27 +5,32 @@ export const config = {
   runtime: "edge",
 };
 
+// كاش بسيط لتقليل استهلاك المفاتيح
 const cache = new Map<string, { value: string; ts: number }>();
-const CACHE_TTL = 1000 * 60 * 60; // كاش لمدة ساعة
+const CACHE_TTL = 1000 * 60 * 30; // 30 دقيقة
 
 export default async function handler(req: Request) {
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
   try {
-    const { message, history, grade, subject, deviceId } = await req.json();
+    const { message, history, grade, subject } = await req.json();
     const now = Date.now();
 
-    // 1. فحص الكاش (توفير الرصيد)
+    // 1. فحص الكاش
     const cacheKey = `${subject}_${grade}_${message.trim().toLowerCase()}`;
     if (cache.has(cacheKey)) {
       const entry = cache.get(cacheKey)!;
-      if (now - entry.ts < CACHE_TTL) return new Response(entry.value);
+      if (now - entry.ts < CACHE_TTL) {
+        return new Response(JSON.stringify({ text: entry.value }), {
+          headers: { "Content-Type": "application/json" }
+        });
+      }
     }
 
     const systemInstruction = `أنت "المعلم الذكي" لطلاب الثانوية بمصر. مادة ${subject} للصف ${grade}.
     اشرح بلهجة مصرية تعليمية ممتعة وجداول Markdown دائماً. ابدأ بكلمة "تمام".`;
 
-    // 2. جمع كل مفاتيح Gemini المتاحة في صورتك
+    // 2. جمع كل المفاتيح الستة المتاحة
     const geminiKeys = [
       process.env.API_KEY,
       process.env.API_KEY_1,
@@ -35,31 +40,41 @@ export default async function handler(req: Request) {
       process.env.API_KEY_5
     ].filter(k => k && k.length > 10);
 
-    // 3. ترتيب المزودين: Gemini أولاً (لأنه مجاني) ثم OpenAI كاحتياط
     const providers = ['gemini', 'openai'];
     let lastError = null;
 
     for (const provider of providers) {
       try {
         if (provider === 'gemini' && geminiKeys.length > 0) {
-          // محاولة مفاتيح Gemini واحداً تلو الآخر حتى ينجح أحدها
+          // جرب كل مفتاح
           for (const key of geminiKeys) {
             try {
               const ai = new GoogleGenAI({ apiKey: key! });
-              const result = await ai.models.generateContent({
-                model: "gemini-3-flash-preview",
-                contents: [...history, { role: "user", parts: [{ text: message }] }],
-                config: { systemInstruction, temperature: 0.8 }
-              });
+              // محاولة موديل gemini-3 أولاً، ثم الهبوط لـ flash في حالة الفشل
+              const modelsToTry = ['gemini-3-flash-preview', 'gemini-flash-latest'];
               
-              if (result.text) {
-                cache.set(cacheKey, { value: result.text, ts: now });
-                return new Response(result.text);
+              for (const modelName of modelsToTry) {
+                try {
+                  const result = await ai.models.generateContent({
+                    model: modelName,
+                    contents: [...history, { role: "user", parts: [{ text: message }] }],
+                    config: { systemInstruction, temperature: 0.8 }
+                  });
+                  
+                  if (result.text) {
+                    cache.set(cacheKey, { value: result.text, ts: now });
+                    return new Response(JSON.stringify({ text: result.text }), {
+                      headers: { "Content-Type": "application/json" }
+                    });
+                  }
+                } catch (e) {
+                  console.error(`Model ${modelName} failed with key`);
+                  continue;
+                }
               }
             } catch (e) {
-              console.warn("Gemini key failed, trying next key...");
               lastError = e;
-              continue; 
+              continue;
             }
           }
         } 
@@ -85,7 +100,9 @@ export default async function handler(req: Request) {
             const data = await resp.json();
             const text = data.choices[0].message.content;
             cache.set(cacheKey, { value: text, ts: now });
-            return new Response(text);
+            return new Response(JSON.stringify({ text: text }), {
+              headers: { "Content-Type": "application/json" }
+            });
           }
         }
       } catch (e) {
@@ -94,11 +111,11 @@ export default async function handler(req: Request) {
       }
     }
 
-    throw lastError || new Error("No provider succeeded");
+    throw lastError || new Error("All keys and providers failed");
 
   } catch (error: any) {
     return new Response(JSON.stringify({ 
-      error: "المعلم يراجع بعض الأوراق، برجاء إعادة إرسال سؤالك الآن وسيعمل فوراً." 
+      error: "المعلم مشغول حالياً بمراجعة أوراق الامتحانات، برجاء المحاولة مرة أخرى خلال لحظات." 
     }), { 
       status: 500, headers: { "Content-Type": "application/json" } 
     });
