@@ -5,33 +5,18 @@ export const config = {
   runtime: "edge",
 };
 
-// كاش بسيط لتقليل استهلاك المفاتيح
-const cache = new Map<string, { value: string; ts: number }>();
-const CACHE_TTL = 1000 * 60 * 30; // 30 دقيقة
-
 export default async function handler(req: Request) {
-  if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
+  }
 
   try {
     const { message, history, grade, subject } = await req.json();
-    const now = Date.now();
-
-    // 1. فحص الكاش
-    const cacheKey = `${subject}_${grade}_${message.trim().toLowerCase()}`;
-    if (cache.has(cacheKey)) {
-      const entry = cache.get(cacheKey)!;
-      if (now - entry.ts < CACHE_TTL) {
-        return new Response(JSON.stringify({ text: entry.value }), {
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-    }
 
     const systemInstruction = `أنت "المعلم الذكي" لطلاب الثانوية بمصر. مادة ${subject} للصف ${grade}.
-    اشرح بلهجة مصرية تعليمية ممتعة وجداول Markdown دائماً. ابدأ بكلمة "تمام".`;
+    اشرح بلهجة مصرية تعليمية مشجعة واستخدم جداول Markdown للمقارنات والقوانين. ابدأ دائماً بكلمة "تمام".`;
 
-    // 2. جمع كل المفاتيح الستة المتاحة
-    const geminiKeys = [
+    const keys = [
       process.env.API_KEY,
       process.env.API_KEY_1,
       process.env.API_KEY_2,
@@ -40,84 +25,40 @@ export default async function handler(req: Request) {
       process.env.API_KEY_5
     ].filter(k => k && k.length > 10);
 
-    const providers = ['gemini', 'openai'];
-    let lastError = null;
+    if (keys.length === 0) {
+      return new Response(JSON.stringify({ text: "عذراً، نظام الذكاء الاصطناعي يحتاج لتفعيل المفاتيح." }), { status: 200 });
+    }
 
-    for (const provider of providers) {
+    // محاولة الاتصال بالمفاتيح المتاحة بالتوالي
+    for (const key of keys) {
       try {
-        if (provider === 'gemini' && geminiKeys.length > 0) {
-          // جرب كل مفتاح
-          for (const key of geminiKeys) {
-            try {
-              const ai = new GoogleGenAI({ apiKey: key! });
-              // محاولة موديل gemini-3 أولاً، ثم الهبوط لـ flash في حالة الفشل
-              const modelsToTry = ['gemini-3-flash-preview', 'gemini-flash-latest'];
-              
-              for (const modelName of modelsToTry) {
-                try {
-                  const result = await ai.models.generateContent({
-                    model: modelName,
-                    contents: [...history, { role: "user", parts: [{ text: message }] }],
-                    config: { systemInstruction, temperature: 0.8 }
-                  });
-                  
-                  if (result.text) {
-                    cache.set(cacheKey, { value: result.text, ts: now });
-                    return new Response(JSON.stringify({ text: result.text }), {
-                      headers: { "Content-Type": "application/json" }
-                    });
-                  }
-                } catch (e) {
-                  console.error(`Model ${modelName} failed with key`);
-                  continue;
-                }
-              }
-            } catch (e) {
-              lastError = e;
-              continue;
-            }
+        const ai = new GoogleGenAI({ apiKey: key! });
+        const response = await ai.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: [...history, { role: "user", parts: [{ text: message }] }],
+          config: { 
+            systemInstruction, 
+            temperature: 0.7,
+            topP: 0.95,
+            topK: 40
           }
-        } 
-        
-        else if (provider === 'openai' && process.env.OPENAI_API_KEY) {
-          const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-            },
-            body: JSON.stringify({
-              model: 'gpt-4o-mini',
-              messages: [
-                { role: 'system', content: systemInstruction },
-                ...history.map((h: any) => ({ role: h.role === 'model' ? 'assistant' : 'user', content: h.parts[0].text })),
-                { role: 'user', content: message }
-              ]
-            })
+        });
+
+        if (response && response.text) {
+          return new Response(JSON.stringify({ text: response.text }), {
+            headers: { "Content-Type": "application/json" }
           });
-          
-          if (resp.ok) {
-            const data = await resp.json();
-            const text = data.choices[0].message.content;
-            cache.set(cacheKey, { value: text, ts: now });
-            return new Response(JSON.stringify({ text: text }), {
-              headers: { "Content-Type": "application/json" }
-            });
-          }
         }
-      } catch (e) {
-        lastError = e;
-        continue;
+      } catch (e: any) {
+        console.error("Key attempt failed:", e.message);
+        continue; // جرب المفتاح التالي
       }
     }
 
-    throw lastError || new Error("All keys and providers failed");
+    return new Response(JSON.stringify({ text: "المعذرة، جميع مفاتيح الخدمة مشغولة حالياً، حاول مرة أخرى بعد قليل." }), { status: 200 });
 
   } catch (error: any) {
-    return new Response(JSON.stringify({ 
-      error: "المعلم مشغول حالياً بمراجعة أوراق الامتحانات، برجاء المحاولة مرة أخرى خلال لحظات." 
-    }), { 
-      status: 500, headers: { "Content-Type": "application/json" } 
-    });
+    console.error("Server Error:", error);
+    return new Response(JSON.stringify({ text: "حدث خطأ فني في السيرفر، برجاء المحاولة لاحقاً." }), { status: 200 });
   }
 }
