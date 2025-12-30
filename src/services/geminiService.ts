@@ -45,24 +45,37 @@ export async function generateStreamResponse(
       }),
     });
 
-    const data = await response.json().catch(() => null);
+    // محاولة قراءة النص أولاً ثم تحويله لـ JSON
+    const rawText = await response.text();
+    let fullText = "";
+
+    try {
+      const data = JSON.parse(rawText);
+      fullText = data.text || data.error || "";
+    } catch (e) {
+      // إذا لم يكن JSON، فمن المحتمل أنه نص خام
+      fullText = rawText;
+    }
     
     if (!response.ok) {
-      const errorMsg = data?.error || 'خطأ في الاتصال بالخادم';
-      onChunk(errorMsg);
-      throw new Error(errorMsg);
+      onChunk(fullText || 'خطأ في الاتصال بالخادم');
+      throw new Error(fullText);
     }
 
-    // إذا كانت الاستجابة نصية مباشرة (من الكاش)
-    const fullText = typeof data === 'string' ? data : (data?.text || "");
-    
-    // تأثير الكتابة التدريجي السريع جداً
+    if (!fullText) {
+        onChunk("عذراً، لم أستطع العثور على إجابة، يرجى إعادة المحاولة.");
+        return "";
+    }
+
+    // تأثير الكتابة التدريجي
     let current = "";
     const words = fullText.split(' ');
     for (let i = 0; i < words.length; i++) {
       current += words[i] + ' ';
       onChunk(cleanMathNotation(current));
-      if (i % 5 === 0) await new Promise(r => setTimeout(r, 5)); 
+      // سرعة متغيرة حسب طول الإجابة
+      const delay = words.length > 100 ? 2 : 10;
+      if (i % 3 === 0) await new Promise(r => setTimeout(r, delay)); 
     }
 
     return fullText;
