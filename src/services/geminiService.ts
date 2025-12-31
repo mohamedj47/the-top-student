@@ -1,20 +1,86 @@
 
-import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender, PerformanceMetrics } from "../types";
-import { GoogleGenAI, Type } from "@google/genai";
-import { questionsBank, StaticQuestion } from "../lib/questionsBank";
+import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender } from "../types";
+import { GoogleGenAI, Modality } from "@google/genai";
+import { questionsBank, localContentRepository, StaticQuestion } from "../lib/questionsBank";
+import { DynamicQuestionBank } from "../lib/dynamicBank";
+import { ensureApiKey } from "../utils/apiKeyManager";
+import { getCurriculumFor } from "../data/curriculum";
 
-// دالة لجلب أفضل مفتاح متاح حالياً
-function getActiveApiKey(): string {
-  const keys = [
-    process.env.API_KEY,
-    process.env.API_KEY_1,
-    process.env.API_KEY_2,
-    process.env.API_KEY_3,
-    process.env.API_KEY_4,
-    process.env.API_KEY_5
-  ].filter(k => k && k.length > 10);
-  
-  return keys[0] || '';
+export function cleanMathNotation(text: string): string {
+  if (!text) return "";
+  return text.replace(/\$/g, '');
+}
+
+export function decodeBase64(base64: string): Uint8Array {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export async function decodePcmAudio(
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number = 24000,
+  numChannels: number = 1,
+): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+}
+
+export function sanitizeForSpeech(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/\\\[|\\\]|\\\(|\\\)/g, ' ')
+    .replace(/\$+/g, ' ')
+    .replace(/\*+/g, ' ')
+    .replace(/#+/g, ' ')
+    .replace(/_+/g, ' ')
+    .replace(/\|/g, ' . ')
+    .replace(/-{3,}/g, ' ')
+    .replace(/[><=\^\/\{\}\[\]]/g, ' ')
+    .replace(/^\s*[\d•.-]+\s+/gm, ' . ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function searchInStaticBank(query: string): StaticQuestion | null {
+  const normQuery = query.toLowerCase().trim();
+  return questionsBank.find(q => 
+    normQuery.includes(q.question.toLowerCase()) || q.question.toLowerCase().includes(normQuery)
+  ) || null;
+}
+
+async function smartHybridOfflineSearch(query: string, subject: Subject, grade: GradeLevel): Promise<string | null> {
+  const normQuery = query.toLowerCase().trim();
+  const repoMatch = localContentRepository.find(item => 
+    item.subject === subject && 
+    (normQuery.includes(item.topic.toLowerCase()) || item.topic.toLowerCase().includes(normQuery))
+  );
+  if (repoMatch) return `### [محتوى من الذاكرة المحلية] 📚\n\n${repoMatch.explanation}\n\n**💡 الخلاصة:** ${repoMatch.summary}`;
+  const dynamicMatch = await DynamicQuestionBank.search(query, subject);
+  if (dynamicMatch) return `### [إجابة محفوظة سابقاً] ✅\n\n${dynamicMatch.answer}`;
+  const bankMatch = searchInStaticBank(query);
+  if (bankMatch) return bankMatch.answer;
+  const curriculum = getCurriculumFor(grade, subject);
+  const allLessons = [...curriculum.term1, ...curriculum.term2];
+  const lessonMatch = allLessons.find(l => normQuery.includes(l.toLowerCase()) || l.toLowerCase().includes(normQuery));
+  if (lessonMatch) {
+    return `### درس: ${lessonMatch} 📖\n\nهذا الدرس موجود في منهجك. حالياً أنت أوفلاين، سأقوم بشرحه بالتفصيل فور توفر الإنترنت وحفظه لك.`;
+  }
+  return null;
 }
 
 export async function generateStreamResponse(
@@ -28,142 +94,105 @@ export async function generateStreamResponse(
   deviceId?: string
 ): Promise<string> {
   
-  if (!navigator.onLine) {
-    const offlineMsg = "أنت الآن في وضع الأوفلاين. يرجى الاتصال بالإنترنت للحصول على شرح جديد.";
-    onChunk(offlineMsg);
-    return offlineMsg;
-  }
-
-  const apiKey = getActiveApiKey();
-  if (!apiKey) {
-    const noKeyMsg = "عذراً، لم يتم العثور على مفتاح تشغيل للذكاء الاصطناعي. يرجى التحقق من الإعدادات.";
-    onChunk(noKeyMsg);
-    return noKeyMsg;
+  if (!navigator.onLine && !attachment) {
+    const offlineResult = await smartHybridOfflineSearch(userMessage, subject, grade);
+    if (offlineResult) { onChunk(offlineResult); return offlineResult; }
+    onChunk("يا بطل، أنت أوفلاين حالياً. سأحاول المساعدة بما لدي في الذاكرة.");
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
-    const systemInstruction = `أنت "المعلم الذكي" لطلاب الثانوية بمصر. مادة ${subject} للصف ${grade}.
-    اشرح بلهجة مصرية تعليمية مشجعة واستخدم جداول Markdown للمقارنات والقوانين. ابدأ دائماً بكلمة "تمام".
-    اجعل شرحك مركزاً على نواتج التعلم وفنيات الامتحان.`;
+    await ensureApiKey();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    // إعداد الأجزاء (Parts) لدعم الصور
+    const parts: any[] = [{ text: userMessage }];
+    if (attachment && attachment.type === 'image') {
+      parts.push({
+        inlineData: {
+          mimeType: attachment.mimeType,
+          data: attachment.data
+        }
+      });
+    }
 
-    const chatHistory = history.slice(-6).map(m => ({
-      role: m.sender === Sender.USER ? "user" : "model",
-      parts: [{ text: m.text }]
+    const contents = history.slice(-5).map(msg => ({
+      role: msg.sender === Sender.USER ? 'user' : 'model',
+      parts: msg.attachment && msg.sender === Sender.USER 
+        ? [{ text: msg.text }, { inlineData: { mimeType: msg.attachment.mimeType, data: msg.attachment.data } }]
+        : [{ text: msg.text }]
     }));
 
-    const result = await ai.models.generateContentStream({
+    contents.push({ role: "user", parts });
+    
+    const streamResponse = await ai.models.generateContentStream({
       model: 'gemini-3-flash-preview',
-      contents: [...chatHistory, { role: "user", parts: [{ text: userMessage }] }],
-      config: {
-        systemInstruction,
-        temperature: 0.7,
-        topP: 0.95,
-        topK: 40
+      contents,
+      config: { 
+        systemInstruction: `أنت "المعلم الذكي" لطلاب الثانوية بمصر لصف ${grade} مادة ${subject}.
+        - حلل أي صورة مرفوعة واشرح ما فيها بدقة (سواء كانت مسألة، رسم بياني، أو خريطة).
+        - رد بلهجة مصرية تعليمية محفزة.
+        - استخدم جداول Markdown.`, 
+        temperature: 0.7 
       }
     });
 
     let fullText = "";
-    for await (const chunk of result) {
-      const chunkText = chunk.text;
-      if (chunkText) {
-        fullText += chunkText;
-        onChunk(fullText);
-      }
+    for await (const chunk of streamResponse) {
+      fullText += (chunk.text || "");
+      onChunk(cleanMathNotation(fullText));
     }
 
+    if (fullText.length > 30) {
+      DynamicQuestionBank.add(userMessage, fullText, subject, grade, deviceId || 'local_user');
+    }
+    
     return fullText;
-
-  } catch (error: any) {
-    console.error("Gemini Direct Error:", error);
-    const errorMsg = "حدث خطأ في الاتصال المباشر. يرجى إعادة المحاولة بعد قليل.";
-    onChunk(errorMsg);
-    return errorMsg;
+  } catch (error) {
+    return "حدث خطأ في الاتصال. حاول مرة أخرى.";
   }
 }
 
-export function searchInStaticBank(query: string): StaticQuestion | null {
-  if (!query) return null;
-  const normalizedQuery = query.trim().toLowerCase();
-  return questionsBank.find(q => 
-    normalizedQuery.includes(q.question.toLowerCase()) || 
-    q.question.toLowerCase().includes(normalizedQuery)
-  ) || null;
-}
-
-export async function evaluateStudentLevel(history: Message[], subject: Subject): Promise<PerformanceMetrics | null> {
-  const apiKey = getActiveApiKey();
-  if (!apiKey) return null;
-
+export async function generateGeminiSpeech(text: string): Promise<string | null> {
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `بناءً على المحادثة التالية في مادة ${subject}، قم بتقييم مستوى الطالب.
-      المحادثة:
-      ${history.map(m => `${m.sender === Sender.USER ? 'الطالب' : 'المعلم'}: ${m.text}`).join('\n')}
-      
-      يجب أن يكون الرد بتنسيق JSON حصراً.`,
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: `بأسلوب معلم محترف: ${text}` }] }],
       config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            accuracy: { type: Type.NUMBER },
-            comprehension: { type: Type.NUMBER },
-            analyticalSkills: { type: Type.NUMBER },
-            consistency: { type: Type.NUMBER },
-            overallLevel: { type: Type.STRING },
-            recommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
-            weakPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
-            strongPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: 'Kore' },
           },
-          required: ["accuracy", "comprehension", "analyticalSkills", "consistency", "overallLevel", "recommendations", "weakPoints", "strongPoints"]
-        }
-      }
+        },
+      },
     });
-
-    return response.text ? JSON.parse(response.text) : null;
-  } catch (error) {
+    return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
+  } catch (e) {
     return null;
   }
 }
 
-export function cleanMathNotation(text: string): string {
-  return text ? text.replace(/\$/g, '') : "";
+export async function generateElevenLabsSpeech(text: string): Promise<Blob | null> {
+  try {
+    const response = await fetch('/api/voice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voiceId: "EXAVITQu4vr4xnSDxMaL" })
+    });
+    if (!response.ok) return null;
+    return await response.blob();
+  } catch (e) {
+    return null;
+  }
 }
 
 export async function streamSpeech(text: string, onComplete?: () => void): Promise<void> {
-  if (!window.speechSynthesis) return;
+  if (!window.speechSynthesis) { onComplete?.(); return; }
   window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text.replace(/[#*`]/g, '').trim());
-  utterance.lang = 'ar-EG';
-  utterance.rate = 0.9;
-  utterance.onend = onComplete || null;
+  const utterance = new SpeechSynthesisUtterance(sanitizeForSpeech(text));
+  const voices = window.speechSynthesis.getVoices();
+  utterance.voice = voices.find(v => v.lang.includes('ar')) || voices[0];
+  utterance.onend = () => onComplete?.();
   window.speechSynthesis.speak(utterance);
 }
-
-export function decodeBase64(base64: string): Uint8Array {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
-
-export async function decodePcmAudio(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer);
-  const frameCount = dataInt16.length / numChannels;
-  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-  for (let channel = 0; channel < numChannels; channel++) {
-    const channelData = buffer.getChannelData(channel);
-    for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-    }
-  }
-  return buffer;
-}
-
-export async function generateAiSpeech(text: string): Promise<any> { return null; }
-export function sanitizeForSpeech(text: string): string { return text; }
