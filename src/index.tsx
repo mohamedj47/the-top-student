@@ -14,8 +14,8 @@ root.render(
   </React.StrictMode>
 );
 
-// تسجيل الـ ServiceWorker فقط في المتصفح وبيئة الإنتاج
-if (typeof window !== 'undefined' && "serviceWorker" in navigator && window.location.protocol === 'https:') {
+// تسجيل الـ ServiceWorker فقط في بيئة الإنتاج السحابية
+if (typeof window !== 'undefined' && "serviceWorker" in navigator && window.location.hostname !== 'localhost') {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").catch(err => {
       console.debug("ServiceWorker registration skipped", err);
