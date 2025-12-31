@@ -1,4 +1,23 @@
+
 import { Subject, GradeLevel } from '../types';
+
+export const ACTIVATION_SALT = "SMART_EDU_EGYPT_2026";
+
+/**
+ * الخوارزمية الموحدة لتوليد كود التفعيل
+ */
+export function generateActivationCode(deviceId: string): string {
+  if (!deviceId) return "";
+  // 1. تنظيف المعرف تماماً (حروف كبيرة، حذف مسافات، حذف أي رموز غريبة)
+  const cleanId = deviceId.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+  // 2. دمج المعرف مع الملح السري
+  const input = cleanId + ACTIVATION_SALT;
+  // 3. التشفير باستخدام Base64
+  const base64 = btoa(input);
+  // 4. استخراج أول 12 حرف ورقم فقط (بدون رموز)
+  const code = base64.replace(/[^A-Z0-9]/gi, '').toUpperCase().substring(0, 12);
+  return code;
+}
 
 export interface DynamicQuestion {
   question: string;
@@ -11,146 +30,54 @@ export interface DynamicQuestion {
 }
 
 export class DynamicQuestionBank {
-  private static STORAGE_KEY = 'edu_dynamic_bank_v2';
+  private static STORAGE_KEY = 'edu_dynamic_bank';
 
-  /**
-   * استرجاع جميع البيانات المخزنة محلياً (Safe)
-   */
   static getAll(): DynamicQuestion[] {
-    try {
-      const data = localStorage.getItem(this.STORAGE_KEY);
-      return data ? JSON.parse(data) : [];
-    } catch (e) {
-      return [];
-    }
+    if (typeof window === 'undefined') return [];
+    const data = localStorage.getItem(this.STORAGE_KEY);
+    return data ? JSON.parse(data) : [];
   }
 
-  /**
-   * بحث دقيق (Exact + Includes + Reverse Includes)
-   */
-  static async search(
-    query: string,
-    subject: string
-  ): Promise<DynamicQuestion | null> {
+  static async search(query: string, subject: string): Promise<DynamicQuestion | null> {
     const bank = this.getAll();
     const normalizedQuery = query.trim().toLowerCase();
-
-    return (
-      bank.find(
-        item =>
-          item.subject === subject &&
-          (
-            normalizedQuery === item.question.toLowerCase() ||
-            item.question.toLowerCase().includes(normalizedQuery) ||
-            normalizedQuery.includes(item.question.toLowerCase())
-          )
-      ) || null
-    );
+    return bank.find(item => 
+      item.subject === subject && 
+      (normalizedQuery.includes(item.question.toLowerCase()) || item.question.toLowerCase().includes(normalizedQuery))
+    ) || null;
   }
 
-  /**
-   * بحث جزئي ذكي (Offline Friendly – Best Match)
-   */
-  static async searchPartial(
-    query: string,
-    subject: string
-  ): Promise<DynamicQuestion | null> {
+  static async searchPartial(query: string, subject: string): Promise<DynamicQuestion | null> {
     const bank = this.getAll();
-    const words = query
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(w => w.length > 3);
-
+    const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
     if (words.length === 0) return null;
-
-    let bestMatch: DynamicQuestion | null = null;
-    let maxMatches = 0;
-
-    for (const item of bank) {
-      if (item.subject !== subject) continue;
-
-      const matchCount = words.filter(word =>
-        item.question.toLowerCase().includes(word)
-      ).length;
-
-      if (matchCount > maxMatches) {
-        maxMatches = matchCount;
-        bestMatch = item;
-      }
-    }
-
-    // كلمة واحدة كفاية للأوفلاين عشان يفضل التطبيق usable
-    return maxMatches >= 1 ? bestMatch : null;
+    return bank.find(item => 
+      item.subject === subject && words.some(word => item.question.toLowerCase().includes(word))
+    ) || null;
   }
 
-  /**
-   * إضافة / تحديث سؤال (Aggressive Learning Cache)
-   */
-  static async add(
-    question: string,
-    answer: string,
-    subject: string,
-    grade: string,
-    deviceId: string
-  ) {
+  static async add(question: string, answer: string, subject: string, grade: string, deviceId: string) {
     const bank = this.getAll();
-
-    const existingIdx = bank.findIndex(
-      i =>
-        i.subject === subject &&
-        i.question.toLowerCase() === question.toLowerCase()
-    );
-
-    if (existingIdx !== -1) {
-      const existing = bank[existingIdx];
-
+    const existing = bank.find(i => i.question === question);
+    if (existing) {
       if (!existing.askedBy.includes(deviceId)) {
         existing.askedBy.push(deviceId);
         existing.timesAsked++;
-        localStorage.setItem(
-          this.STORAGE_KEY,
-          JSON.stringify(bank)
-        );
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(bank));
       }
     } else {
-      const newItem: DynamicQuestion = {
-        question,
-        answer,
-        subject,
-        grade,
-        timestamp: Date.now(),
-        timesAsked: 1,
-        askedBy: [deviceId],
-      };
-
-      // الحفاظ على الأداء: آخر 500 سؤال فقط
-      const updatedBank = [newItem, ...bank].slice(0, 500);
-
-      localStorage.setItem(
-        this.STORAGE_KEY,
-        JSON.stringify(updatedBank)
-      );
+      bank.push({ question, answer, subject, grade, timestamp: Date.now(), timesAsked: 1, askedBy: [deviceId] });
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(bank));
     }
   }
-
-  /**
-   * إحصائيات عامة
-   */
+  
   static async getStats() {
-    const bank = this.getAll();
-    return {
-      totalQuestions: bank.length,
-      popularCount: bank.filter(q => q.timesAsked > 2).length,
-    };
+      const bank = this.getAll();
+      return { totalQuestions: bank.length, popularCount: bank.filter(q => q.timesAsked > 5).length };
   }
 
-  /**
-   * أكثر الأسئلة شيوعًا
-   */
   static async getPopular(limit = 5) {
-    const bank = this.getAll();
-    return [...bank]
-      .sort((a, b) => b.timesAsked - a.timesAsked)
-      .slice(0, limit);
+      const bank = this.getAll();
+      return bank.sort((a, b) => b.timesAsked - a.timesAsked).slice(0, limit);
   }
 }
