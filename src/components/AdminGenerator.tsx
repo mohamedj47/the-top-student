@@ -1,14 +1,13 @@
 
 import React, { useState } from 'react';
-import { ShieldCheck, Copy, RefreshCw, Lock, Home, KeyRound, Smartphone, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Copy, RefreshCw, Lock, Home, Smartphone, AlertCircle } from 'lucide-react';
+import { generateActivationCode } from '../lib/dynamicBank';
 
-const SALT = "SMART_EDU_EGYPT_2026"; 
 const ADMIN_PASS = "202625";
 
 export const AdminGenerator: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  
   const [studentDeviceId, setStudentDeviceId] = useState('');
   const [generatedCode, setGeneratedCode] = useState('');
 
@@ -22,30 +21,17 @@ export const AdminGenerator: React.FC = () => {
     }
   };
 
-  const generateCode = () => {
+  const handleGenerate = () => {
     if (!studentDeviceId.trim()) return;
-    
-    // تنظيف المعرف من أي مسافات
-    const cleanId = studentDeviceId.trim().toUpperCase();
-    
-    // منطق التوليد: Base64 -> تنظيف من الرموز -> أول 12 حرف
-    const rawCode = btoa(cleanId + SALT).replace(/[^A-Z0-9]/gi, '').toUpperCase();
-    const final12 = rawCode.substring(0, 12);
-    
-    // تنسيق الكود لشكل 4-4-4
-    const formatted = final12.match(/.{1,4}/g)?.join(' - ') || final12;
-    
+    const code = generateActivationCode(studentDeviceId.trim());
+    // تنسيق الكود لشكل 4-4-4 للعرض فقط
+    const formatted = code.match(/.{1,4}/g)?.join(' - ') || code;
     setGeneratedCode(formatted);
   };
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(generatedCode);
-    alert("تم نسخ كود التفعيل!");
-  };
-
-  const handleExit = (e: React.MouseEvent) => {
-    e.preventDefault();
-    window.location.hash = '';
+    navigator.clipboard.writeText(generatedCode.replace(/\s-\s/g, ''));
+    alert("تم نسخ كود التفعيل الأصلي بنجاح!");
   };
 
   if (!isAuthenticated) {
@@ -69,7 +55,7 @@ export const AdminGenerator: React.FC = () => {
               دخول
             </button>
           </form>
-          <button onClick={handleExit} className="block w-full mt-6 text-slate-500 hover:text-white text-sm transition-colors">
+          <button onClick={() => window.location.hash = ''} className="block w-full mt-6 text-slate-500 hover:text-white text-sm transition-colors">
             العودة للتطبيق
           </button>
         </div>
@@ -78,75 +64,75 @@ export const AdminGenerator: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center p-4 font-mono" dir="rtl">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 font-mono" dir="rtl">
       <div className="max-w-xl w-full space-y-6">
         <div className="flex items-center justify-between text-slate-400 mb-4">
            <div className="flex items-center gap-2">
              <ShieldCheck size={20} className="text-emerald-500" />
-             <span className="font-bold text-white">مولد أكواد التفعيل</span>
+             <span className="font-bold text-white uppercase tracking-tighter">Admin Panel v2.0</span>
            </div>
-           <button onClick={() => setIsAuthenticated(false)} className="text-xs hover:text-white">تسجيل خروج</button>
+           <button onClick={() => setIsAuthenticated(false)} className="text-xs hover:text-white bg-slate-800 px-3 py-1 rounded-full">خروج</button>
         </div>
 
-        <div className="bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 p-8">
+        <div className="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 p-8">
           <div className="space-y-6">
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 flex items-start gap-2">
-               <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={16} />
-               <p className="text-xs text-amber-200 leading-relaxed">
-                 تنبيه: انسخ المعرف من جهاز الطالب كما هو تماماً (مثال: STD-0000E76A) لضمان عمل الكود.
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 flex items-start gap-3">
+               <AlertCircle className="text-blue-400 shrink-0 mt-0.5" size={18} />
+               <p className="text-xs text-blue-200 leading-relaxed font-sans">
+                 <b>طريقة العمل:</b> الكود يتم إنشاؤه بناءً على معرف الجهاز الخاص بالطالب حصراً. تأكد من كتابة الـ ID كما يظهر في جهاز الطالب بالضبط (مثال: STD-A28AEC6B).
                </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2 text-right">معرف جهاز الطالب:</label>
+              <label className="block text-sm font-bold text-slate-400 mb-3 text-right font-sans">معرف جهاز الطالب (Device ID):</label>
               <div className="relative">
                 <input 
                     type="text" 
                     value={studentDeviceId}
-                    onChange={(e) => setStudentDeviceId(e.target.value)}
+                    onChange={(e) => setStudentDeviceId(e.target.value.toUpperCase())}
                     placeholder="STD-XXXXXXXX"
-                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-4 text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none font-mono text-center text-lg"
+                    className="w-full bg-black/40 border-2 border-slate-700 rounded-2xl px-4 py-5 text-white focus:border-emerald-500 outline-none font-mono text-center text-2xl tracking-widest transition-all"
                     dir="ltr"
                 />
-                <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600" size={20} />
+                <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-700" size={24} />
               </div>
             </div>
 
             <button 
-              onClick={generateCode}
+              onClick={handleGenerate}
               disabled={!studentDeviceId.trim()}
-              className={`w-full font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg ${
+              className={`w-full font-black py-5 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-xl text-lg ${
                   studentDeviceId.trim() 
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white' 
-                  : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white' 
+                  : 'bg-slate-800 text-slate-600 cursor-not-allowed'
               }`}
             >
-              <RefreshCw size={20} />
+              <RefreshCw size={22} className={studentDeviceId.trim() ? '' : 'opacity-20'} />
               توليد كود التفعيل
             </button>
 
             {generatedCode && (
-              <div className="bg-black/30 p-6 rounded-xl border border-emerald-500/30 text-center animate-in fade-in slide-in-from-top-2">
-                <p className="text-sm text-emerald-400 mb-3 font-bold">تم توليد الكود بنجاح</p>
-                <div className="bg-slate-900 p-4 rounded-lg border border-slate-700 mb-4 cursor-pointer hover:border-emerald-500 transition-colors" onClick={copyToClipboard}>
-                  <code className="text-3xl font-black text-white tracking-widest">{generatedCode}</code>
+              <div className="bg-emerald-500/5 p-6 rounded-2xl border border-emerald-500/20 text-center animate-in zoom-in-95 duration-300">
+                <p className="text-xs text-emerald-400 mb-4 font-bold uppercase tracking-widest">كود التفعيل جاهز للإرسال</p>
+                <div className="bg-black/60 p-5 rounded-xl border border-slate-700 mb-5 group cursor-pointer" onClick={copyToClipboard}>
+                  <code className="text-3xl md:text-4xl font-black text-white tracking-widest block">{generatedCode}</code>
                 </div>
                 <button 
                   onClick={copyToClipboard}
-                  className="w-full bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg flex items-center justify-center gap-2 text-sm font-bold"
+                  className="w-full bg-white text-slate-900 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-black hover:bg-emerald-50 transition-colors"
                 >
-                  <Copy size={16} />
-                  نسخ الكود وإرساله للطالب
+                  <Copy size={18} />
+                  نسخ الكود الأصلي
                 </button>
               </div>
             )}
           </div>
         </div>
 
-        <div className="text-center pt-8">
-           <button onClick={handleExit} className="text-slate-500 hover:text-white flex items-center justify-center gap-2 transition-colors w-full">
-             <Home size={18} />
-             <span>العودة للتطبيق</span>
+        <div className="text-center pt-4">
+           <button onClick={() => window.location.hash = ''} className="text-slate-600 hover:text-white flex items-center justify-center gap-2 transition-colors text-sm font-bold">
+             <Home size={16} />
+             العودة للواجهة الرئيسية
            </button>
         </div>
       </div>
