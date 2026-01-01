@@ -11,6 +11,7 @@ export function cleanMathNotation(text: string): string {
   return text.replace(/\$/g, '');
 }
 
+// إضافة وظيفة البحث في البنك الثابت لإصلاح خطأ الاستيراد في app/page.tsx
 export function searchInStaticBank(query: string): StaticQuestion | null {
   if (!query) return null;
   const normalized = query.trim().toLowerCase();
@@ -18,31 +19,6 @@ export function searchInStaticBank(query: string): StaticQuestion | null {
     normalized.includes(q.question.toLowerCase()) || 
     q.question.toLowerCase().includes(normalized)
   ) || null;
-}
-
-async function smartHybridOfflineSearch(query: string, subject: Subject, grade: GradeLevel): Promise<string | null> {
-  const normQuery = query.toLowerCase().trim();
-
-  // 1. البحث في الأسئلة التي تم تخزينها ديناميكياً (الإجابات السابقة للـ AI)
-  const dynamicMatch = await DynamicQuestionBank.search(query, subject);
-  if (dynamicMatch) {
-    return `### [تم استرجاع الإجابة من الذاكرة المحلية] 💾\n\n${dynamicMatch.answer}\n\n*ملاحظة: هذه الإجابة تم حفظها سابقاً أثناء اتصالك بالإنترنت.*`;
-  }
-
-  // 2. البحث في المستودع المحلي الثابت (الموسوعة التعليمية)
-  const repoMatch = localContentRepository.find(item => 
-    item.subject === subject && 
-    (normQuery.includes(item.topic.toLowerCase()) || item.topic.toLowerCase().includes(normQuery))
-  );
-  if (repoMatch) {
-    return `### [محتوى أوفلاين متاح] 📚\n\n${repoMatch.explanation}\n\n**الخلاصة:** ${repoMatch.summary}`;
-  }
-
-  // 3. البحث في بنك الأسئلة
-  const bankMatch = searchInStaticBank(query);
-  if (bankMatch) return bankMatch.answer;
-
-  return null;
 }
 
 export function decodeBase64(base64: string): Uint8Array {
@@ -108,27 +84,34 @@ export async function generateGeminiSpeech(text: string): Promise<string | null>
     });
     return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
   } catch (e) {
+    console.error("Gemini TTS Failed:", e);
     return null;
   }
 }
 
 export async function generateElevenLabsSpeech(text: string): Promise<string | null> {
   try {
+    // نستخدم API داخلي لتجنب تسريب المفتاح في الكلاينت
     const response = await fetch('/api/voice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         text: sanitizeForSpeech(text),
-        voiceId: "SAz9YHcvj6GT2YYXd8vo" 
+        voiceId: "SAz9YHcvj6GT2YYXd8vo" // معرف صوت عربي احترافي يشبه Kore
       })
     });
+    
     if (!response.ok) return null;
+    
     const arrayBuffer = await response.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
     let binary = '';
-    for (let i = 0; i < bytes.byteLength; i++) { binary += String.fromCharCode(bytes[i]); }
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
     return btoa(binary);
   } catch (e) {
+    console.error("ElevenLabs TTS Failed:", e);
     return null;
   }
 }
@@ -137,9 +120,15 @@ export async function streamSpeech(text: string, onComplete?: () => void): Promi
   if (!window.speechSynthesis) { onComplete?.(); return; }
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(sanitizeForSpeech(text));
+  
+  // التأكد من اختيار صوت عربي حصراً لمنع الصوت الإنجليزي
   const voices = window.speechSynthesis.getVoices();
   const arabicVoice = voices.find(v => v.lang.startsWith('ar')) || voices.find(v => v.name.includes('Arabic'));
-  if (arabicVoice) utterance.voice = arabicVoice;
+  
+  if (arabicVoice) {
+    utterance.voice = arabicVoice;
+  }
+  
   utterance.onend = () => onComplete?.();
   utterance.onerror = () => onComplete?.();
   window.speechSynthesis.speak(utterance);
@@ -155,21 +144,6 @@ export async function generateStreamResponse(
   options?: GenerationOptions,
   deviceId?: string
 ): Promise<string> {
-  
-  // 1. فحص حالة الاتصال بالإنترنت فوراً
-  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-
-  if (isOffline) {
-    const offlineResult = await smartHybridOfflineSearch(userMessage, subject, grade);
-    if (offlineResult) {
-      onChunk(offlineResult);
-      return offlineResult;
-    }
-    const msg = "عذراً، أنت في وضع الأوفلاين حالياً ولم أجد هذا السؤال في ذاكرتي المحلية. سيتم شرحه لك تلقائياً بمجرد عودة الاتصال وحفظه للمستقبل.";
-    onChunk(msg);
-    return msg;
-  }
-
   try {
     await ensureApiKey();
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -177,7 +151,10 @@ export async function generateStreamResponse(
     const parts: any[] = [{ text: userMessage }];
     if (attachment && attachment.type === 'image') {
       parts.push({
-        inlineData: { mimeType: attachment.mimeType, data: attachment.data }
+        inlineData: {
+          mimeType: attachment.mimeType,
+          data: attachment.data
+        }
       });
     }
 
@@ -192,6 +169,10 @@ export async function generateStreamResponse(
 
     let systemInstruction = `أنت "المعلم الذكي" لطلاب الثانوية بمصر لصف ${grade} مادة ${subject}. رد بلهجة مصرية تعليمية محفزة.`;
     
+    if (userMessage.includes("ليلة الامتحان") || userMessage.includes("مراجعة")) {
+      systemInstruction = `أنت مدرس خبير في مادة ${subject} للصف ${grade} – المنهج المصري. مراجعة ليلة الامتحان شاملة وسريعة.`;
+    }
+    
     const streamResponse = await ai.models.generateContentStream({
       model: 'gemini-3-flash-preview',
       contents,
@@ -204,20 +185,12 @@ export async function generateStreamResponse(
       onChunk(cleanMathNotation(fullText));
     }
     
-    // 2. تخزين الإجابة في البنك الديناميكي لاستخدامها أوفلاين لاحقاً
-    if (fullText.length > 20) {
+    if (fullText.length > 30) {
       DynamicQuestionBank.add(userMessage, fullText, subject, grade, deviceId || 'local_user');
     }
     
     return fullText;
   } catch (error) {
-    // 3. محاولة أخيرة للبحث المحلي إذا فشل الطلب لأي سبب تقني
-    const fallback = await smartHybridOfflineSearch(userMessage, subject, grade);
-    if (fallback) {
-      onChunk(fallback);
-      return fallback;
-    }
-    return "حدث خطأ في الاتصال بالمعلم الذكي. تأكد من جودة الإنترنت.";
+    return "حدث خطأ في الاتصال. حاول مرة أخرى.";
   }
 }
-لا
