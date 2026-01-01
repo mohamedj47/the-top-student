@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, Suspense } from 'react';
 import { GradeLevel, Subject, Message, Sender, Attachment, GenerationOptions } from '../types';
 import { generateStreamResponse } from '../services/geminiService';
@@ -7,7 +6,7 @@ import { VideoResult } from '../data/videoData';
 import { LiveVoiceModal } from './LiveVoiceModal';
 import { 
   Send, ChevronRight, List, Bot, Loader2, BookText, 
-  Trophy, HelpCircle, Target, Mic, Camera, Paperclip, X, CheckCircle, Wifi, WifiOff, Zap
+  Trophy, HelpCircle, Target, Mic, Camera, Paperclip, X, CheckCircle
 } from 'lucide-react';
 
 const LessonBrowser = React.lazy(() => import('./LessonBrowser').then(module => ({ default: module.LessonBrowser })));
@@ -30,7 +29,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
 
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [isLessonBrowserOpen, setIsLessonBrowserOpen] = useState(false);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
@@ -42,17 +40,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
@@ -71,6 +58,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
     setInputValue(`اشرح لي أكثر عن: "${text}"`);
     setTimeout(() => {
       textareaRef.current?.focus();
+      textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 100);
   };
 
@@ -127,25 +115,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
           <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-full"><ChevronRight size={24} /></button>
           <div className="text-right">
             <h1 className="text-lg font-bold text-slate-800 truncate leading-tight">{subject}</h1>
-            <div className="flex items-center gap-2">
-              <p className="text-[10px] text-indigo-600 font-black">{grade}</p>
-              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-black ${isOnline ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-                {isOnline ? <Wifi size={8} /> : <WifiOff size={8} />}
-                <span>{isOnline ? 'متصل بالذكاء الاصطناعي' : 'وضع الذاكرة المحلية (أوفلاين)'}</span>
-              </div>
-            </div>
+            <p className="text-[10px] text-indigo-600 font-black">{grade}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-           <div className="hidden md:flex flex-col items-end px-3 border-r border-slate-100">
-              <span className="text-[9px] font-black text-slate-400">قدرة النظام</span>
-              <div className="flex items-center gap-1">
-                 <Zap size={10} className="text-yellow-400 fill-current" />
-                 <span className="text-[10px] font-black text-slate-600">10,000+ طالب</span>
-              </div>
-           </div>
-           <button onClick={() => setIsLessonBrowserOpen(true)} className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100"><List size={22} /></button>
-        </div>
+        <button onClick={() => setIsLessonBrowserOpen(true)} className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100"><List size={22} /></button>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide">
@@ -166,20 +139,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, on
       </div>
 
       <div className="p-4 bg-white border-t border-slate-200 space-y-4 shadow-[0_-10px_25px_rgba(0,0,0,0.03)] no-print">
-        {selectedAttachment && (
-          <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl animate-in slide-in-from-bottom-2">
-             <div className="w-12 h-12 rounded-lg bg-white border border-slate-200 overflow-hidden">
-                <img src={`data:${selectedAttachment.mimeType};base64,${selectedAttachment.data}`} className="w-full h-full object-cover" />
-             </div>
-             <span className="text-xs font-bold text-slate-500 flex-1 truncate">تم اختيار صورة لسؤالها</span>
-             <button onClick={() => setSelectedAttachment(null)} className="p-1.5 bg-red-50 text-red-500 rounded-full"><X size={14}/></button>
-          </div>
-        )}
-
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           <QuickTool icon={BookText} label="مذكرة ليلة الامتحان" color="text-indigo-600 border-indigo-100" prompt={`أريد "مذكرة ليلة الامتحان" لمادة ${subject} لصف ${grade}.`} />
           <QuickTool icon={Trophy} label="اختبار مستوى" color="text-emerald-600 border-emerald-100" prompt={`قم بإعداد اختبار MCQ لـ ${subject}.`} />
           <QuickTool icon={CheckCircle} label="عرض الإجابات" color="text-blue-600 border-blue-100" prompt={`أظهر الإجابات النموذجية.`} />
+          <QuickTool icon={HelpCircle} label="سؤال تفاعلي" color="text-amber-600 border-amber-100" prompt={`اطرح عليّ سؤال MCQ الآن.`} />
         </div>
 
         <div className="flex items-center gap-2">
