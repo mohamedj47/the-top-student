@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, Sender, Subject } from '../types';
 import ReactMarkdown from 'react-markdown';
@@ -6,6 +7,7 @@ import { Bot, User, Volume2, StopCircle, Loader2, Play } from 'lucide-react';
 import { 
   streamSpeech, 
   generateGeminiSpeech, 
+  generateElevenLabsSpeech,
   cleanMathNotation, 
   decodeBase64, 
   decodePcmAudio, 
@@ -42,6 +44,7 @@ const InteractiveText: React.FC<{ text: any, onQuote?: (t: string) => void, onPl
   );
 };
 
+// تم تعديل نوع onQuote ليكون (t: string) => void بدلاً من (t: void) => void لإصلاح أخطاء النوع
 export const MessageBubble: React.FC<{ message: Message, subject?: Subject, onQuote?: (t: string) => void }> = ({ message, subject, onQuote }) => {
   const isUser = message.sender === Sender.USER;
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -60,32 +63,61 @@ export const MessageBubble: React.FC<{ message: Message, subject?: Subject, onQu
     if (isSpeaking) { stopAudio(); return; }
     setIsSpeaking(true);
     setIsAiSpeechLoading(true);
+    
     try {
       const cleanText = sanitizeForSpeech(textToPlay);
       const cacheKey = AudioCache.generateKey(cleanText);
+      
       if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       const ctx = audioContextRef.current;
+      
+      // 1. البحث في الكاش
       const cached = await AudioCache.get(cacheKey);
       let buffer: AudioBuffer | null = null;
+      
       if (cached) {
-        buffer = await decodePcmAudio(decodeBase64(cached), ctx, 24000, 1);
+        // إذا كان بالكاش، نفك الضغط ونشغل
+        buffer = await ctx.decodeAudioData(decodeBase64(cached).buffer).catch(async () => {
+           // إذا فشل فك الضغط (ربما PCM خام من Gemini)، نستخدم محركنا الخاص
+           return await decodePcmAudio(decodeBase64(cached), ctx, 24000, 1);
+        });
       } else {
+        // 2. محاولة صوت Kore من Gemini
         const geminiAudio = await generateGeminiSpeech(cleanText);
         if (geminiAudio) {
           buffer = await decodePcmAudio(decodeBase64(geminiAudio), ctx, 24000, 1);
           await AudioCache.save(cacheKey, geminiAudio);
+        } else {
+          // 3. محاولة ElevenLabs كخيار بديل احترافي
+          const elevenLabsAudio = await generateElevenLabsSpeech(cleanText);
+          if (elevenLabsAudio) {
+             const audioData = decodeBase64(elevenLabsAudio);
+             buffer = await ctx.decodeAudioData(audioData.buffer);
+             await AudioCache.save(cacheKey, elevenLabsAudio);
+          }
         }
       }
+      
       setIsAiSpeechLoading(false);
+      
       if (buffer) {
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.connect(ctx.destination);
         source.start();
         activeSourcesRef.current.add(source);
-        source.onended = () => { activeSourcesRef.current.delete(source); if (activeSourcesRef.current.size === 0) setIsSpeaking(false); };
-      } else { await streamSpeech(cleanText, () => setIsSpeaking(false)); }
-    } catch (err) { setIsAiSpeechLoading(false); await streamSpeech(textToPlay, () => setIsSpeaking(false)); }
+        source.onended = () => { 
+          activeSourcesRef.current.delete(source); 
+          if (activeSourcesRef.current.size === 0) setIsSpeaking(false); 
+        };
+      } else { 
+        // 4. الخيار الأخير: محرك المتصفح (معدل لضمان العربية)
+        await streamSpeech(cleanText, () => setIsSpeaking(false)); 
+      }
+    } catch (err) { 
+      setIsAiSpeechLoading(false); 
+      await streamSpeech(textToPlay, () => setIsSpeaking(false)); 
+    }
   };
 
   return (
