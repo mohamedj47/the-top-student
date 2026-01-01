@@ -14,11 +14,14 @@ root.render(
   </React.StrictMode>
 );
 
-// تسجيل الـ ServiceWorker فقط في بيئة الإنتاج السحابية
-if (typeof window !== 'undefined' && "serviceWorker" in navigator && window.location.hostname !== 'localhost') {
+// تسجيل الـ ServiceWorker للعمل بدون إنترنت (PWA)
+if (typeof window !== 'undefined' && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(err => {
-      console.debug("ServiceWorker registration skipped", err);
-    });
+    // نتحقق من أننا في بيئة إنتاج أو HTTPS لتجنب أخطاء المتصفح
+    if (window.location.protocol === 'https:' || window.location.hostname === 'localhost') {
+      navigator.serviceWorker.register("/sw.js").catch(err => {
+        console.debug("Offline capability registration failed:", err);
+      });
+    }
   });
 }
