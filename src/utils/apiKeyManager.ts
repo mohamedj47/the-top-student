@@ -1,11 +1,13 @@
 
 /**
  * نظام إدارة المفاتيح الذكي - إصدار الإنتاج الضخم (10,000+ طالب)
+ * يعتمد على خوارزمية التوزيع بناءً على معرف الجهاز (Deterministic Sharding)
  */
 
 interface KeyStatus {
   key: string;
-  failedAt: number; // وقت آخر فشل للمفتاح
+  id: string;
+  failedAt: number;
   isCoolingDown: boolean;
 }
 
@@ -15,61 +17,78 @@ const KEYS_POOL: string[] = [
   process.env.API_KEY_2,
   process.env.API_KEY_3,
   process.env.API_KEY_4,
-  process.env.API_KEY_5
+  process.env.API_KEY_5,
+  process.env.API_KEY_6,
+  process.env.API_KEY_7,
+  process.env.API_KEY_8,
+  process.env.API_KEY_9,
+  process.env.API_KEY_10,
+  process.env.API_KEY_11
 ].filter(k => k && k.length > 10) as string[];
 
 // حالة المفاتيح في الذاكرة
-const keyRegistry: KeyStatus[] = KEYS_POOL.map(key => ({
+const keyRegistry: KeyStatus[] = KEYS_POOL.map((key, index) => ({
   key,
+  id: `key_${index}`,
   failedAt: 0,
   isCoolingDown: false
 }));
 
-const COOLDOWN_PERIOD = 60 * 1000; // فترة التبريد: دقيقة واحدة
-
-export const getAvailableKeysCount = () => KEYS_POOL.length;
+const COOLDOWN_PERIOD = 60 * 1000; // فترة التبريد الأساسية: 60 ثانية
 
 /**
- * اختيار أفضل مفتاح متاح حالياً ليس في فترة التبريد
+ * دالة بسيطة لعمل Hash لمعرف الجهاز لتحويله إلى رقم
+ */
+const hashString = (str: string): number => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+};
+
+/**
+ * اختيار أفضل مفتاح متاح حالياً مع توزيع الطلاب
  */
 export const getApiKey = (): string => {
+  const deviceId = typeof window !== 'undefined' ? localStorage.getItem('device_id') || 'guest' : 'server';
   const now = Date.now();
   
-  // تنظيف حالة التبريد للمفاتيح التي انتهت مدتها
+  // 1. تنظيف المفاتيح من فترة التبريد
   keyRegistry.forEach(item => {
     if (item.isCoolingDown && (now - item.failedAt > COOLDOWN_PERIOD)) {
       item.isCoolingDown = false;
     }
   });
 
-  // البحث عن أول مفتاح متاح (ليس في فترة تبريد)
-  const healthyKey = keyRegistry.find(item => !item.isCoolingDown);
-  
-  if (healthyKey) return healthyKey.key;
+  // 2. تحديد نقطة البداية للطالب الحالي (Load Balancing)
+  // الطالب دائماً سيبدأ محاولته من نفس المفتاح المخصص له لتوزيع الضغط
+  const startIndex = hashString(deviceId) % keyRegistry.length;
 
-  // إذا كانت كل المفاتيح في فترة تبريد (ضغط هائل)، نختار أقدم مفتاح فشل
+  // 3. البحث عن مفتاح سليم بدءاً من حصة الطالب
+  for (let i = 0; i < keyRegistry.length; i++) {
+    const currentIndex = (startIndex + i) % keyRegistry.length;
+    const candidate = keyRegistry[currentIndex];
+    if (!candidate.isCoolingDown) return candidate.key;
+  }
+
+  // 4. إذا كانت كل الآبار جافة، نأخذ الأقدم فشلاً
   const oldestFailed = [...keyRegistry].sort((a, b) => a.failedAt - b.failedAt)[0];
   return oldestFailed.key;
 };
 
-/**
- * وسم مفتاح معين بالفشل لبدء فترة التبريد له
- */
 export const markKeyAsFailed = (failedKey: string) => {
   const item = keyRegistry.find(i => i.key === failedKey);
   if (item) {
     item.failedAt = Date.now();
     item.isCoolingDown = true;
-    console.warn(`⚠️ API Key moved to cooldown: ${failedKey.substring(0, 8)}...`);
+    console.warn(`❌ [API Monitor] Key ${item.id} reached quota limit. Cooling down...`);
   }
 };
 
-/**
- * التبديل اليدوي (للتوافق مع الكود القديم)
- */
-export const rotateApiKey = (): boolean => {
-  return KEYS_POOL.length > 1;
-};
+export const getAvailableKeysCount = () => keyRegistry.length;
+export const getHealthyKeysCount = () => keyRegistry.filter(k => !k.isCoolingDown).length;
 
 export const ensureApiKey = async (): Promise<boolean> => {
   const currentKey = getApiKey();
