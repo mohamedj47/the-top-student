@@ -1,32 +1,24 @@
 
-const CACHE_NAME = "smart-tutor-v4";
+const CACHE_NAME = "smart-tutor-offline-v5";
 
-// الأصول الأساسية المطلوب تخزينها فوراً
 const PRECACHE_ASSETS = [
   "/",
   "/index.html",
   "/manifest.json",
-  "/index.tsx",
-  "/App.tsx",
-  "/types.ts",
-  "/main.tsx",
   "https://cdn.tailwindcss.com",
   "https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap",
   "https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"
 ];
 
-// تثبيت الـ SW
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log("Pre-caching assets...");
       return cache.addAll(PRECACHE_ASSETS);
     })
   );
   self.skipWaiting();
 });
 
-// تفعيل وتنظيف الكاش القديم
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) => Promise.all(
@@ -38,40 +30,32 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// استراتيجية التعامل مع الشبكة
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // تجاهل طلبات الـ API الخاصة بـ Gemini لكي لا تتعطل
-  if (url.hostname.includes("generativelanguage.googleapis.com")) {
+  // استراتيجية Cache-First للأصول الثابتة والمكتبات
+  if (PRECACHE_ASSETS.includes(url.pathname) || url.hostname.includes("cdn") || url.hostname.includes("fonts")) {
+    event.respondWith(
+      caches.match(event.request).then((response) => {
+        return response || fetch(event.request).then((networkResponse) => {
+          return caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, networkResponse.clone());
+            return networkResponse;
+          });
+        });
+      })
+    );
     return;
   }
 
+  // السماح لطلبات API بالمرور للشبكة مع معالجة الخطأ في geminiService
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // تحديث الكاش في الخلفية لضمان الحداثة
-        fetch(event.request).then((networkResponse) => {
-          if (networkResponse.ok) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
-          }
-        }).catch(() => {});
-        return cachedResponse;
-      }
-
-      return fetch(event.request).then((networkResponse) => {
-        // تخزين المصادر الخارجية الجديدة (مثل الصور أو المكتبات)
-        if (networkResponse.ok && (url.origin !== location.origin || event.request.destination === 'image')) {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request).catch(() => {
+        if (event.request.mode === 'navigate') {
+          return caches.match('/');
         }
-        return networkResponse;
       });
-    }).catch(() => {
-      // الرد التلقائي عند الفشل التام في وضع الأوفلاين
-      if (event.request.mode === 'navigate') {
-        return caches.match('/');
-      }
     })
   );
 });
