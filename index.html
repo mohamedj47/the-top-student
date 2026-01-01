@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>الطالب المتفوق - نظام الثانوية الذكي</title>
+    <title>الطالب المتفوق - المعلم الذكي</title>
     
     <!-- PWA Settings -->
     <link rel="manifest" href="/manifest.json" />
@@ -17,72 +17,71 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-      :root {
-        --font-main: 'Cairo', sans-serif;
-      }
+      :root { --font-main: 'Cairo', sans-serif; }
       body {
         font-family: var(--font-main);
         background-color: #f8fafc;
         margin: 0;
-        -webkit-tap-highlight-color: transparent;
-        line-height: 1.9;
-        color: #1e293b;
-        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
       }
-      .font-sans { font-family: var(--font-main) !important; }
-      .scrollbar-hide::-webkit-scrollbar { display: none; }
-      
-      p, span, div, li, td {
-        font-weight: 500;
-        letter-spacing: 0;
+      /* تحسين جمالية شاشة التحميل */
+      #initial-loader {
+        height: 100vh;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: radial-gradient(circle at center, #ffffff 0%, #f1f5f9 100%);
       }
-
-      .markdown-body table { 
-        border-collapse: separate;
-        border-spacing: 0;
-        width: 100%; 
-        margin: 1.5rem 0; 
-        border: 1px solid #e2e8f0; 
-        border-radius: 12px;
+      .loader-logo {
+        width: 80px;
+        height: 80px;
+        background: #4f46e5;
+        border-radius: 24px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        margin-bottom: 24px;
+        box-shadow: 0 20px 25px -5px rgba(79, 70, 229, 0.2);
+        animation: pulse 2s infinite;
+      }
+      @keyframes pulse {
+        0% { transform: scale(1); box-shadow: 0 20px 25px -5px rgba(79, 70, 229, 0.2); }
+        50% { transform: scale(1.05); box-shadow: 0 25px 30px -5px rgba(79, 70, 229, 0.4); }
+        100% { transform: scale(1); box-shadow: 0 20px 25px -5px rgba(79, 70, 229, 0.2); }
+      }
+      .progress-bar {
+        width: 200px;
+        height: 6px;
+        background: #e2e8f0;
+        border-radius: 10px;
         overflow: hidden;
-        font-size: 0.95rem;
+        margin-top: 10px;
       }
-      .markdown-body th { 
-        background-color: #f1f5f9; 
-        padding: 14px; 
-        font-weight: 700;
-        color: #0f172a;
-        border-bottom: 2px solid #e2e8f0;
-        text-align: right; 
+      .progress-fill {
+        height: 100%;
+        background: #4f46e5;
+        width: 30%;
+        animation: progress 2s infinite ease-in-out;
+        border-radius: 10px;
       }
-      .markdown-body td { 
-        padding: 12px 14px; 
-        border-bottom: 1px solid #f1f5f9;
-        text-align: right; 
-        color: #334155;
+      @keyframes progress {
+        0% { width: 0%; transform: translateX(-100%); }
+        50% { width: 70%; transform: translateX(50%); }
+        100% { width: 0%; transform: translateX(200%); }
       }
-      
-      .markdown-body h1, .markdown-body h2, .markdown-body h3 {
-        font-family: var(--font-main);
-        color: #1e1b4b;
-        font-weight: 700;
-        margin-top: 1.8rem;
-        margin-bottom: 1rem;
-        line-height: 1.4;
+      .loader-text {
+        font-weight: 800;
+        color: #1e293b;
+        font-size: 1.25rem;
       }
-
-      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-      .loading-spinner {
-        width: 40px;
-        height: 40px;
-        border: 4px solid #e2e8f0;
-        border-top-color: #4f46e5;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-      }
-
-      button, a {
-        touch-action: manipulation;
+      .loader-subtext {
+        color: #64748b;
+        font-size: 0.875rem;
+        margin-top: 4px;
+        font-weight: 600;
       }
     </style>
   <script type="importmap">
@@ -104,13 +103,20 @@
 </head>
   <body>
     <div id="root">
-        <div style="height: 100vh; width: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #f8fafc;">
-            <div class="loading-spinner"></div>
-            <h2 style="margin-top: 20px; color: #475569; font-weight: 700; font-family: 'Cairo';">جاري تحميل المعلم الذكي...</h2>
+      <div id="initial-loader">
+        <div class="loader-logo">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 8-4 8 4-8 4-8-4z"/><path d="M4 10.7V17a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6.3"/><path d="m8 22 4-4 4 4"/></svg>
         </div>
+        <div class="loader-text">المعلم الذكي</div>
+        <div class="loader-subtext">جاري تجهيز بيئة التفوق...</div>
+        <div class="progress-bar">
+            <div class="progress-fill"></div>
+        </div>
+      </div>
     </div>
     
-    <script type="module" src="/src/main.tsx"></script>
+    <!-- المدخل الرئيسي للتطبيق - تم التغيير ليتوافق مع Vercel -->
+    <script type="module" src="/main.tsx"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
   </body>
 </html>
