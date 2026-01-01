@@ -20,39 +20,27 @@ export function searchInStaticBank(query: string): StaticQuestion | null {
   ) || null;
 }
 
-/**
- * وظيفة البحث الذكي للأوفلاين
- */
 async function smartHybridOfflineSearch(query: string, subject: Subject, grade: GradeLevel): Promise<string | null> {
   const normQuery = query.toLowerCase().trim();
 
-  // 1. البحث في الأسئلة التي أجاب عنها الذكاء الاصطناعي سابقاً وحفظها في الذاكرة الديناميكية
+  // 1. البحث في الأسئلة التي تم تخزينها ديناميكياً (الإجابات السابقة للـ AI)
   const dynamicMatch = await DynamicQuestionBank.search(query, subject);
   if (dynamicMatch) {
-    return `### [إجابة من الذاكرة المحلية] ✅\n\n${dynamicMatch.answer}\n\n*(ملاحظة: هذه الإجابة تم حفظها سابقاً أثناء اتصالك بالإنترنت)*`;
+    return `### [تم استرجاع الإجابة من الذاكرة المحلية] 💾\n\n${dynamicMatch.answer}\n\n*ملاحظة: هذه الإجابة تم حفظها سابقاً أثناء اتصالك بالإنترنت.*`;
   }
 
-  // 2. البحث في مستودع المحتوى المحلي (Encyclopedia)
+  // 2. البحث في المستودع المحلي الثابت (الموسوعة التعليمية)
   const repoMatch = localContentRepository.find(item => 
     item.subject === subject && 
     (normQuery.includes(item.topic.toLowerCase()) || item.topic.toLowerCase().includes(normQuery))
   );
   if (repoMatch) {
-    return `### [محتوى تعليمي أوفلاين] 📚\n\n${repoMatch.explanation}\n\n**💡 الخلاصة:** ${repoMatch.summary}`;
+    return `### [محتوى أوفلاين متاح] 📚\n\n${repoMatch.explanation}\n\n**الخلاصة:** ${repoMatch.summary}`;
   }
 
-  // 3. البحث في بنك الأسئلة الثابت
+  // 3. البحث في بنك الأسئلة
   const bankMatch = searchInStaticBank(query);
   if (bankMatch) return bankMatch.answer;
-
-  // 4. إذا لم يجد شيئاً، يبحث في عناوين الدروس لإعطاء الطالب فكرة عما يجب أن يدرسه
-  const curriculum = getCurriculumFor(grade, subject);
-  const allLessons = [...curriculum.term1, ...curriculum.term2];
-  const lessonMatch = allLessons.find(l => normQuery.includes(l.toLowerCase()) || l.toLowerCase().includes(normQuery));
-  
-  if (lessonMatch) {
-    return `### درس: ${lessonMatch} 📖\n\nأنت الآن في وضع "أوفلاين". هذا الدرس موجود بالفعل في منهجك، ولكن الشرح المفصل يحتاج لاتصال بالإنترنت لأول مرة ليتم حفظه لك. حاول الاتصال بالشبكة لثوانٍ وسأقوم بتحميله فوراً.`;
-  }
 
   return null;
 }
@@ -120,7 +108,6 @@ export async function generateGeminiSpeech(text: string): Promise<string | null>
     });
     return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
   } catch (e) {
-    console.error("Gemini TTS Failed:", e);
     return null;
   }
 }
@@ -135,15 +122,11 @@ export async function generateElevenLabsSpeech(text: string): Promise<string | n
         voiceId: "SAz9YHcvj6GT2YYXd8vo" 
       })
     });
-    
     if (!response.ok) return null;
-    
     const arrayBuffer = await response.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
     let binary = '';
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
+    for (let i = 0; i < bytes.byteLength; i++) { binary += String.fromCharCode(bytes[i]); }
     return btoa(binary);
   } catch (e) {
     return null;
@@ -173,14 +156,16 @@ export async function generateStreamResponse(
   deviceId?: string
 ): Promise<string> {
   
-  // التحقق من حالة الإنترنت أولاً
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+  // 1. فحص حالة الاتصال بالإنترنت فوراً
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+  if (isOffline) {
     const offlineResult = await smartHybridOfflineSearch(userMessage, subject, grade);
     if (offlineResult) {
       onChunk(offlineResult);
       return offlineResult;
     }
-    const msg = "أنت الآن في وضع الأوفلاين (بدون إنترنت). يرجى العلم أنني أستطيع الإجابة فقط على الأسئلة التي تم طرحها مسبقاً أو المواضيع الأساسية المحفوظة في ذاكرتي المحلية. جرب سؤالاً آخر أو اتصل بالشبكة.";
+    const msg = "عذراً، أنت في وضع الأوفلاين حالياً ولم أجد هذا السؤال في ذاكرتي المحلية. سيتم شرحه لك تلقائياً بمجرد عودة الاتصال وحفظه للمستقبل.";
     onChunk(msg);
     return msg;
   }
@@ -207,10 +192,6 @@ export async function generateStreamResponse(
 
     let systemInstruction = `أنت "المعلم الذكي" لطلاب الثانوية بمصر لصف ${grade} مادة ${subject}. رد بلهجة مصرية تعليمية محفزة.`;
     
-    if (userMessage.includes("ليلة الامتحان") || userMessage.includes("مراجعة")) {
-      systemInstruction = `أنت مدرس خبير في مادة ${subject} للصف ${grade} – المنهج المصري. مراجعة ليلة الامتحان شاملة وسريعة.`;
-    }
-    
     const streamResponse = await ai.models.generateContentStream({
       model: 'gemini-3-flash-preview',
       contents,
@@ -223,19 +204,20 @@ export async function generateStreamResponse(
       onChunk(cleanMathNotation(fullText));
     }
     
-    // حفظ الإجابة فور استلامها لاستخدامها لاحقاً في وضع الأوفلاين
-    if (fullText.length > 30) {
+    // 2. تخزين الإجابة في البنك الديناميكي لاستخدامها أوفلاين لاحقاً
+    if (fullText.length > 20) {
       DynamicQuestionBank.add(userMessage, fullText, subject, grade, deviceId || 'local_user');
     }
     
     return fullText;
   } catch (error) {
-    // محاولة البحث المحلي كخيار أخير في حالة فشل الـ API حتى مع وجود إنترنت
+    // 3. محاولة أخيرة للبحث المحلي إذا فشل الطلب لأي سبب تقني
     const fallback = await smartHybridOfflineSearch(userMessage, subject, grade);
     if (fallback) {
       onChunk(fallback);
       return fallback;
     }
-    return "حدث خطأ في الاتصال. حاول مرة أخرى.";
+    return "حدث خطأ في الاتصال بالمعلم الذكي. تأكد من جودة الإنترنت.";
   }
 }
+لا
