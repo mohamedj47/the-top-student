@@ -1,3 +1,4 @@
+
 import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender } from "../types";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { questionsBank, localContentRepository, StaticQuestion } from "../lib/questionsBank";
@@ -8,6 +9,16 @@ import { getCurriculumFor } from "../data/curriculum";
 export function cleanMathNotation(text: string): string {
   if (!text) return "";
   return text.replace(/\$/g, '');
+}
+
+// إضافة وظيفة البحث في البنك الثابت لإصلاح خطأ الاستيراد في app/page.tsx
+export function searchInStaticBank(query: string): StaticQuestion | null {
+  if (!query) return null;
+  const normalized = query.trim().toLowerCase();
+  return questionsBank.find(q => 
+    normalized.includes(q.question.toLowerCase()) || 
+    q.question.toLowerCase().includes(normalized)
+  ) || null;
 }
 
 export function decodeBase64(base64: string): Uint8Array {
@@ -55,31 +66,72 @@ export function sanitizeForSpeech(text: string): string {
     .trim();
 }
 
-export function searchInStaticBank(query: string): StaticQuestion | null {
-  const normQuery = query.toLowerCase().trim();
-  return questionsBank.find(q => 
-    normQuery.includes(q.question.toLowerCase()) || q.question.toLowerCase().includes(normQuery)
-  ) || null;
+export async function generateGeminiSpeech(text: string): Promise<string | null> {
+  try {
+    await ensureApiKey();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: `بأسلوب معلم محترف، انطق النص التالي بالعربية الواضحة: ${text}` }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: 'Kore' },
+          },
+        },
+      },
+    });
+    return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
+  } catch (e) {
+    console.error("Gemini TTS Failed:", e);
+    return null;
+  }
 }
 
-async function smartHybridOfflineSearch(query: string, subject: Subject, grade: GradeLevel): Promise<string | null> {
-  const normQuery = query.toLowerCase().trim();
-  const repoMatch = localContentRepository.find(item => 
-    item.subject === subject && 
-    (normQuery.includes(item.topic.toLowerCase()) || item.topic.toLowerCase().includes(normQuery))
-  );
-  if (repoMatch) return `### [محتوى من الذاكرة المحلية] 📚\n\n${repoMatch.explanation}\n\n**💡 الخلاصة:** ${repoMatch.summary}`;
-  const dynamicMatch = await DynamicQuestionBank.search(query, subject);
-  if (dynamicMatch) return `### [إجابة محفوظة سابقاً] ✅\n\n${dynamicMatch.answer}`;
-  const bankMatch = searchInStaticBank(query);
-  if (bankMatch) return bankMatch.answer;
-  const curriculum = getCurriculumFor(grade, subject);
-  const allLessons = [...curriculum.term1, ...curriculum.term2];
-  const lessonMatch = allLessons.find(l => normQuery.includes(l.toLowerCase()) || l.toLowerCase().includes(normQuery));
-  if (lessonMatch) {
-    return `### درس: ${lessonMatch} 📖\n\nهذا الدرس موجود في منهجك. حالياً أنت أوفلاين، سأقوم بشرحه بالتفصيل فور توفر الإنترنت وحفظه لك.`;
+export async function generateElevenLabsSpeech(text: string): Promise<string | null> {
+  try {
+    // نستخدم API داخلي لتجنب تسريب المفتاح في الكلاينت
+    const response = await fetch('/api/voice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        text: sanitizeForSpeech(text),
+        voiceId: "SAz9YHcvj6GT2YYXd8vo" // معرف صوت عربي احترافي يشبه Kore
+      })
+    });
+    
+    if (!response.ok) return null;
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  } catch (e) {
+    console.error("ElevenLabs TTS Failed:", e);
+    return null;
   }
-  return null;
+}
+
+export async function streamSpeech(text: string, onComplete?: () => void): Promise<void> {
+  if (!window.speechSynthesis) { onComplete?.(); return; }
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(sanitizeForSpeech(text));
+  
+  // التأكد من اختيار صوت عربي حصراً لمنع الصوت الإنجليزي
+  const voices = window.speechSynthesis.getVoices();
+  const arabicVoice = voices.find(v => v.lang.startsWith('ar')) || voices.find(v => v.name.includes('Arabic'));
+  
+  if (arabicVoice) {
+    utterance.voice = arabicVoice;
+  }
+  
+  utterance.onend = () => onComplete?.();
+  utterance.onerror = () => onComplete?.();
+  window.speechSynthesis.speak(utterance);
 }
 
 export async function generateStreamResponse(
@@ -92,13 +144,6 @@ export async function generateStreamResponse(
   options?: GenerationOptions,
   deviceId?: string
 ): Promise<string> {
-  
-  if (!navigator.onLine && !attachment) {
-    const offlineResult = await smartHybridOfflineSearch(userMessage, subject, grade);
-    if (offlineResult) { onChunk(offlineResult); return offlineResult; }
-    onChunk("يا بطل، أنت أوفلاين حالياً. سأحاول المساعدة بما لدي في الذاكرة.");
-  }
-
   try {
     await ensureApiKey();
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -122,33 +167,16 @@ export async function generateStreamResponse(
 
     contents.push({ role: "user", parts });
 
-    // تحديد التعليمات بناءً على نوع الطلب
-    let systemInstruction = `أنت "المعلم الذكي" لطلاب الثانوية بمصر لصف ${grade} مادة ${subject}.
-    - حلل أي صورة مرفوعة واشرح ما فيها بدقة.
-    - رد بلهجة مصرية تعليمية محفزة.
-    - استخدم جداول Markdown.`;
-
-    // إذا كان الطلب مراجعة ليلة الامتحان
+    let systemInstruction = `أنت "المعلم الذكي" لطلاب الثانوية بمصر لصف ${grade} مادة ${subject}. رد بلهجة مصرية تعليمية محفزة.`;
+    
     if (userMessage.includes("ليلة الامتحان") || userMessage.includes("مراجعة")) {
-      systemInstruction = `أنت مدرس خبير في مادة ${subject} للصف ${grade} – المنهج المصري.
-      مهمتك: إعداد "مراجعة ليلة الامتحان" شاملة وسريعة تساعد الطالب على المذاكرة في آخر ساعات قبل الامتحان.
-      التزم بالآتي بدقة وبلهجة مصرية محببة:
-      1️⃣ خريطة المنهج: اعرض الوحدات وأهم أفكارها باختصار.
-      2️⃣ أهم النقاط الامتحانية ⭐: قوانين، تعريفات، وملاحظات يقع فيها الطلاب.
-      3️⃣ التوقعات الأقوى 🔮: 5-10 أسئلة متوقعة جداً مع توضيح نوع السؤال.
-      4️⃣ أمثلة محلولة: 3-5 أمثلة بخطوات الحل وملاحظات امتحانية.
-      5️⃣ امتحان ليلة الامتحان ⏱: 10 أسئلة متنوعة مع الإجابات النموذجية والسبب.
-      6️⃣ الخلاصة النهائية 🧾: لخص المنهج كله في 10 نقاط مباشرة وسهلة للحفظ.
-      لا تستخدم حشو، ركز على ما يأتي في الامتحان فقط.`;
+      systemInstruction = `أنت مدرس خبير في مادة ${subject} للصف ${grade} – المنهج المصري. مراجعة ليلة الامتحان شاملة وسريعة.`;
     }
     
     const streamResponse = await ai.models.generateContentStream({
       model: 'gemini-3-flash-preview',
       contents,
-      config: { 
-        systemInstruction, 
-        temperature: 0.7 
-      }
+      config: { systemInstruction, temperature: 0.7 }
     });
 
     let fullText = "";
@@ -156,7 +184,7 @@ export async function generateStreamResponse(
       fullText += (chunk.text || "");
       onChunk(cleanMathNotation(fullText));
     }
-
+    
     if (fullText.length > 30) {
       DynamicQuestionBank.add(userMessage, fullText, subject, grade, deviceId || 'local_user');
     }
@@ -165,49 +193,4 @@ export async function generateStreamResponse(
   } catch (error) {
     return "حدث خطأ في الاتصال. حاول مرة أخرى.";
   }
-}
-
-export async function generateGeminiSpeech(text: string): Promise<string | null> {
-  try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `بأسلوب معلم محترف: ${text}` }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' },
-          },
-        },
-      },
-    });
-    return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
-  } catch (e) {
-    return null;
-  }
-}
-
-export async function generateElevenLabsSpeech(text: string): Promise<Blob | null> {
-  try {
-    const response = await fetch('/api/voice', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voiceId: "EXAVITQu4vr4xnSDxMaL" })
-    });
-    if (!response.ok) return null;
-    return await response.blob();
-  } catch (e) {
-    return null;
-  }
-}
-
-export async function streamSpeech(text: string, onComplete?: () => void): Promise<void> {
-  if (!window.speechSynthesis) { onComplete?.(); return; }
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(sanitizeForSpeech(text));
-  const voices = window.speechSynthesis.getVoices();
-  utterance.voice = voices.find(v => v.lang.includes('ar')) || voices[0];
-  utterance.onend = () => onComplete?.();
-  window.speechSynthesis.speak(utterance);
 }
