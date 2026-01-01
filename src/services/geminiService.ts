@@ -1,4 +1,3 @@
-
 import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender } from "../types";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { questionsBank, localContentRepository, StaticQuestion } from "../lib/questionsBank";
@@ -104,7 +103,6 @@ export async function generateStreamResponse(
     await ensureApiKey();
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    // إعداد الأجزاء (Parts) لدعم الصور
     const parts: any[] = [{ text: userMessage }];
     if (attachment && attachment.type === 'image') {
       parts.push({
@@ -123,15 +121,32 @@ export async function generateStreamResponse(
     }));
 
     contents.push({ role: "user", parts });
+
+    // تحديد التعليمات بناءً على نوع الطلب
+    let systemInstruction = `أنت "المعلم الذكي" لطلاب الثانوية بمصر لصف ${grade} مادة ${subject}.
+    - حلل أي صورة مرفوعة واشرح ما فيها بدقة.
+    - رد بلهجة مصرية تعليمية محفزة.
+    - استخدم جداول Markdown.`;
+
+    // إذا كان الطلب مراجعة ليلة الامتحان
+    if (userMessage.includes("ليلة الامتحان") || userMessage.includes("مراجعة")) {
+      systemInstruction = `أنت مدرس خبير في مادة ${subject} للصف ${grade} – المنهج المصري.
+      مهمتك: إعداد "مراجعة ليلة الامتحان" شاملة وسريعة تساعد الطالب على المذاكرة في آخر ساعات قبل الامتحان.
+      التزم بالآتي بدقة وبلهجة مصرية محببة:
+      1️⃣ خريطة المنهج: اعرض الوحدات وأهم أفكارها باختصار.
+      2️⃣ أهم النقاط الامتحانية ⭐: قوانين، تعريفات، وملاحظات يقع فيها الطلاب.
+      3️⃣ التوقعات الأقوى 🔮: 5-10 أسئلة متوقعة جداً مع توضيح نوع السؤال.
+      4️⃣ أمثلة محلولة: 3-5 أمثلة بخطوات الحل وملاحظات امتحانية.
+      5️⃣ امتحان ليلة الامتحان ⏱: 10 أسئلة متنوعة مع الإجابات النموذجية والسبب.
+      6️⃣ الخلاصة النهائية 🧾: لخص المنهج كله في 10 نقاط مباشرة وسهلة للحفظ.
+      لا تستخدم حشو، ركز على ما يأتي في الامتحان فقط.`;
+    }
     
     const streamResponse = await ai.models.generateContentStream({
       model: 'gemini-3-flash-preview',
       contents,
       config: { 
-        systemInstruction: `أنت "المعلم الذكي" لطلاب الثانوية بمصر لصف ${grade} مادة ${subject}.
-        - حلل أي صورة مرفوعة واشرح ما فيها بدقة (سواء كانت مسألة، رسم بياني، أو خريطة).
-        - رد بلهجة مصرية تعليمية محفزة.
-        - استخدم جداول Markdown.`, 
+        systemInstruction, 
         temperature: 0.7 
       }
     });
