@@ -1,7 +1,9 @@
+
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Mic, MicOff, PhoneOff, Loader2, Activity } from 'lucide-react';
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 import { GradeLevel, Subject } from '../types';
+import { getApiKey, markKeyAsFailed } from '../utils/apiKeyManager';
 
 interface LiveVoiceModalProps {
   isOpen: boolean;
@@ -24,16 +26,6 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose,
   const nextStartTimeRef = useRef<number>(0);
   const mountedRef = useRef(true);
 
-  const safeCloseAudioContext = async (ctxRef: React.MutableRefObject<AudioContext | null>) => {
-    const ctx = ctxRef.current;
-    if (ctx) {
-      ctxRef.current = null;
-      if (ctx.state !== 'closed') {
-        try { await ctx.close(); } catch (e) { console.debug("Context already closed"); }
-      }
-    }
-  };
-
   const cleanup = useCallback(async () => {
     if (sessionRef.current) {
       try { sessionRef.current.close(); } catch (e) {}
@@ -45,8 +37,15 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose,
     }
     if (processorRef.current) { processorRef.current.disconnect(); processorRef.current = null; }
     if (sourceRef.current) { sourceRef.current.disconnect(); sourceRef.current = null; }
-    await safeCloseAudioContext(audioContextRef);
-    await safeCloseAudioContext(inputAudioContextRef);
+    
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      try { await audioContextRef.current.close(); } catch(e) {}
+      audioContextRef.current = null;
+    }
+    if (inputAudioContextRef.current && inputAudioContextRef.current.state !== 'closed') {
+      try { await inputAudioContextRef.current.close(); } catch(e) {}
+      inputAudioContextRef.current = null;
+    }
   }, []);
 
   const encodeAudio = (inputData: Float32Array) => {
@@ -73,9 +72,10 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose,
   };
 
   const connect = useCallback(async (currentRetry = 0) => {
+    const currentApiKey = getApiKey();
     try {
       setStatus('connecting');
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: currentApiKey });
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       const ctx = new AudioContextClass({ sampleRate: 24000 });
       audioContextRef.current = ctx;
@@ -83,7 +83,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose,
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000 } });
       mediaStreamRef.current = stream;
 
-      const systemInstruction = `أنت "المعلم الذكي" مدرس خصوصي مصري لصف ${grade} مادة ${subject}. أجب باختصار وبلهجة مصرية مشجعة. لا تستخدم رموز Markdown في الصوت.`;
+      const systemInstruction = `أنت "المعلم الذكي" لصف ${grade} مادة ${subject}. أجب بلهجة مصرية قصيرة ومباشرة. لا تزد عن جملتين.`;
 
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -124,20 +124,22 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose,
                 const start = Math.max(audioContextRef.current.currentTime, nextStartTimeRef.current);
                 source.start(start);
                 nextStartTimeRef.current = start + buffer.duration;
-                setVolumeLevel(Math.random() * 0.5 + 0.3);
+                setVolumeLevel(0.8);
              }
-             setTimeout(() => setVolumeLevel(0), 200);
+             setTimeout(() => setVolumeLevel(0), 300);
           },
           onclose: () => { if (mountedRef.current) onClose(); },
-          onerror: (err) => { 
+          onerror: (err: any) => { 
             console.error("Live Error:", err);
+            if (err?.message?.includes('429')) markKeyAsFailed(currentApiKey);
             if (mountedRef.current && currentRetry < 2) cleanup().then(() => connect(currentRetry + 1)); 
             else setStatus('error'); 
           }
         }
       });
       sessionRef.current = await sessionPromise;
-    } catch (e) { 
+    } catch (e: any) { 
+      if (e?.message?.includes('429')) markKeyAsFailed(currentApiKey);
       if (currentRetry < 2) cleanup().then(() => connect(currentRetry + 1)); 
       else setStatus('error'); 
     }
@@ -155,13 +157,13 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose,
     <div className="fixed inset-0 bg-slate-900/95 z-[60] flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300">
       <button onClick={onClose} className="absolute top-6 right-6 text-white/50 hover:text-white hover:bg-white/10 p-2 rounded-full transition-all"><X size={32} /></button>
       <div className="flex flex-col items-center gap-8 w-full max-w-md">
-         {status === 'connecting' && <div className="flex flex-col items-center gap-4 text-indigo-200"><Loader2 size={48} className="animate-spin" /><p className="text-lg font-medium">جاري الاتصال...</p></div>}
-         {status === 'error' && <div className="flex flex-col items-center gap-4 text-red-300 text-center"><PhoneOff size={48} /><p className="text-lg font-medium">فشل الاتصال.</p><button onClick={() => connect(0)} className="px-6 py-2 bg-white text-red-600 font-bold rounded-full">إعادة المحاولة</button></div>}
+         {status === 'connecting' && <div className="flex flex-col items-center gap-4 text-indigo-200"><Loader2 size={48} className="animate-spin" /><p className="text-lg font-medium">جاري فتح القناة...</p></div>}
+         {status === 'error' && <div className="flex flex-col items-center gap-4 text-red-300 text-center"><PhoneOff size={48} /><p className="text-lg font-medium">عذراً، الضغط عالي جداً.</p><button onClick={() => connect(0)} className="px-6 py-2 bg-white text-red-600 font-bold rounded-full">محاولة مرة أخرى</button></div>}
          {status === 'connected' && (
             <>
-               <div className="text-center space-y-2"><h2 className="text-3xl font-bold text-white tracking-tight">محادثة صوتية</h2><p className="text-indigo-200 text-lg">{subject}</p></div>
+               <div className="text-center space-y-2"><h2 className="text-3xl font-black text-white">المعلم معك الآن</h2><p className="text-indigo-200 text-lg font-bold">تحدث بوضوح عن درس {subject}</p></div>
                <div className="relative w-64 h-64 flex items-center justify-center">
-                  <div className="absolute inset-0 border-4 border-indigo-500/30 rounded-full transition-all duration-75" style={{ transform: `scale(${1 + volumeLevel * 0.5})` }}></div>
+                  <div className="absolute inset-0 border-4 border-indigo-500/30 rounded-full transition-all duration-75" style={{ transform: `scale(${1 + volumeLevel * 0.4})` }}></div>
                   <div className={`relative w-32 h-32 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(99,102,241,0.5)] transition-all duration-200 ${isMuted ? 'bg-slate-700' : 'bg-indigo-600'}`}><Activity size={48} className="text-white" /></div>
                </div>
                <div className="flex items-center gap-6 mt-8">
