@@ -34,7 +34,7 @@ const keyRegistry: KeyStatus[] = KEYS_POOL.map((key, index) => ({
   isCoolingDown: false
 }));
 
-const COOLDOWN_PERIOD = 60 * 1000; // فترة التبريد الأساسية: 60 ثانية
+const COOLDOWN_PERIOD = 45 * 1000; // تقليل فترة التبريد لـ 45 ثانية لسرعة العودة
 
 /**
  * دالة بسيطة لعمل Hash لمعرف الجهاز لتحويله إلى رقم
@@ -52,6 +52,8 @@ const hashString = (str: string): number => {
  * اختيار أفضل مفتاح متاح حالياً مع توزيع الطلاب
  */
 export const getApiKey = (): string => {
+  if (keyRegistry.length === 0) return process.env.API_KEY || '';
+  
   const deviceId = typeof window !== 'undefined' ? localStorage.getItem('device_id') || 'guest' : 'server';
   const now = Date.now();
   
@@ -63,7 +65,6 @@ export const getApiKey = (): string => {
   });
 
   // 2. تحديد نقطة البداية للطالب الحالي (Load Balancing)
-  // الطالب دائماً سيبدأ محاولته من نفس المفتاح المخصص له لتوزيع الضغط
   const startIndex = hashString(deviceId) % keyRegistry.length;
 
   // 3. البحث عن مفتاح سليم بدءاً من حصة الطالب
@@ -73,7 +74,7 @@ export const getApiKey = (): string => {
     if (!candidate.isCoolingDown) return candidate.key;
   }
 
-  // 4. إذا كانت كل الآبار جافة، نأخذ الأقدم فشلاً
+  // 4. إذا تعطل الكل، نأخذ المفتاح الأقدم فشلاً لمحاولة الإنقاذ
   const oldestFailed = [...keyRegistry].sort((a, b) => a.failedAt - b.failedAt)[0];
   return oldestFailed.key;
 };
@@ -83,12 +84,9 @@ export const markKeyAsFailed = (failedKey: string) => {
   if (item) {
     item.failedAt = Date.now();
     item.isCoolingDown = true;
-    console.warn(`❌ [API Monitor] Key ${item.id} reached quota limit. Cooling down...`);
+    console.warn(`❌ [API Monitor] Key ${item.id} reached quota. Cooling down...`);
   }
 };
-
-export const getAvailableKeysCount = () => keyRegistry.length;
-export const getHealthyKeysCount = () => keyRegistry.filter(k => !k.isCoolingDown).length;
 
 export const ensureApiKey = async (): Promise<boolean> => {
   const currentKey = getApiKey();
