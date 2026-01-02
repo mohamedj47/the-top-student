@@ -1,36 +1,52 @@
+
 import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender } from "../types";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { questionsBank, localContentRepository, StaticQuestion } from "../lib/questionsBank";
 import { DynamicQuestionBank } from "../lib/dynamicBank";
 import { ensureApiKey, getApiKey, markKeyAsFailed } from "../utils/apiKeyManager";
+import { getCurriculumFor } from "../data/curriculum";
 
 export function cleanMathNotation(text: string): string {
   if (!text) return "";
   return text.replace(/\$/g, '');
 }
 
-export function searchInStaticBank(query: string): StaticQuestion | null {
-  if (!query) return null;
-  const normalized = query.trim().toLowerCase();
-  return questionsBank.find(q => 
-    normalized.includes(q.question.toLowerCase()) || 
-    q.question.toLowerCase().includes(normalized)
-  ) || null;
-}
-
+/**
+ * البحث الذكي الشامل: يبحث في البنك الثابت، ثم الديناميكي، ثم في فهرس المنهج
+ */
 async function smartHybridOfflineSearch(query: string, subject: Subject, grade: GradeLevel): Promise<string | null> {
+  // 1. البحث في الأسئلة التي تمت إجابتها سابقاً (الذاكرة النشطة)
   const dynamicMatch = await DynamicQuestionBank.search(query, subject);
-  if (dynamicMatch) return `### [تم استرجاع الإجابة من الذاكرة المحلية] 💾\n\n${dynamicMatch.answer}`;
+  if (dynamicMatch) return `### [إجابة مسترجعة من الذاكرة الذكية] 💾\n\n${dynamicMatch.answer}`;
   
+  // 2. البحث في المستودع المعرفي الثابت
   const repoMatch = localContentRepository.find(item => 
     item.subject === subject && query.toLowerCase().includes(item.topic.toLowerCase())
   );
   if (repoMatch) return `### [محتوى أوفلاين متاح] 📚\n\n${repoMatch.explanation}`;
 
-  const bankMatch = searchInStaticBank(query);
-  if (bankMatch) return bankMatch.answer;
+  // 3. البحث في فهرس المنهج (البيانات التي أرسلتها أنت)
+  const curriculum = getCurriculumFor(grade, subject);
+  const allLessons = [...curriculum.term1, ...curriculum.term2];
+  const lessonMatch = allLessons.find(lesson => query.includes(lesson.split(':')[0]));
+  
+  if (lessonMatch) {
+    return `### [معلومات المنهج] 📖\n\nبناءً على خطة الوزارة، درس **"${lessonMatch}"** هو جزء أساسي من منهجك. \n\n*نصيحة: المعلم الذكي يحاول الاتصال بالخادم الآن لإعطائك الشرح الكامل، يرجى المحاولة بعد لحظات أو تصفح ملخصات الدروس الأخرى.*`;
+  }
 
   return null;
+}
+
+// إضافة وظيفة البحث في البنك الثابت لإصلاح خطأ الاستيراد في app/page.tsx
+/**
+ * البحث في بنك الأسئلة الثابت
+ */
+export function searchInStaticBank(query: string): StaticQuestion | null {
+  const normalizedQuery = query.toLowerCase().trim();
+  return questionsBank.find(q => 
+    normalizedQuery.includes(q.question.toLowerCase()) || 
+    q.question.toLowerCase().includes(normalizedQuery)
+  ) || null;
 }
 
 export function decodeBase64(base64: string): Uint8Array {
@@ -40,7 +56,6 @@ export function decodeBase64(base64: string): Uint8Array {
   return bytes;
 }
 
-// Fixed decodePcmAudio to correctly handle buffer offsets and frame count
 export async function decodePcmAudio(data: Uint8Array, ctx: AudioContext, sampleRate = 24000, numChannels = 1): Promise<AudioBuffer> {
   const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
   const frameCount = dataInt16.length / numChannels;
@@ -58,13 +73,9 @@ export function sanitizeForSpeech(text: string): string {
   return text.replace(/[*#$_\-\\|]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-/**
- * Generate speech using Gemini's native text-to-speech model.
- */
 export async function generateGeminiSpeech(text: string): Promise<string | null> {
   let attempts = 0;
   const maxAttempts = 3;
-  
   while (attempts < maxAttempts) {
     const currentKey = getApiKey();
     try {
@@ -83,7 +94,6 @@ export async function generateGeminiSpeech(text: string): Promise<string | null>
   return null;
 }
 
-// Added the missing generateElevenLabsSpeech function required by MessageBubble.tsx
 export async function generateElevenLabsSpeech(text: string): Promise<string | null> {
   try {
     const response = await fetch('/api/voice', {
@@ -95,15 +105,9 @@ export async function generateElevenLabsSpeech(text: string): Promise<string | n
     const arrayBuffer = await response.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
     let binary = '';
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
+    for (let i = 0; i < bytes.byteLength; i++) { binary += String.fromCharCode(bytes[i]); }
     return btoa(binary);
-  } catch (error) {
-    console.error("ElevenLabs error:", error);
-    return null;
-  }
+  } catch (error) { return null; }
 }
 
 export async function generateStreamResponse(
@@ -111,12 +115,7 @@ export async function generateStreamResponse(
   onChunk: (text: string) => void, attachment?: Attachment, options?: GenerationOptions, deviceId?: string
 ): Promise<string> {
   
-  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-  if (isOffline) {
-    const res = await smartHybridOfflineSearch(userMessage, subject, grade);
-    if (res) { onChunk(res); return res; }
-    return "أنت أوفلاين حالياً.";
-  }
+  const offlineResult = await smartHybridOfflineSearch(userMessage, subject, grade);
 
   let attempts = 0;
   const maxAttempts = 3;
@@ -137,7 +136,7 @@ export async function generateStreamResponse(
       const streamResponse = await ai.models.generateContentStream({
         model: 'gemini-3-flash-preview',
         contents,
-        config: { systemInstruction: `أنت معلم مصري لصف ${grade} مادة ${subject}.`, temperature: 0.7 }
+        config: { systemInstruction: `أنت معلم مصري لصف ${grade} مادة ${subject}. اجابتك مختصرة ومركزة وتدعم الطالب.` }
       });
 
       let fullText = "";
@@ -150,14 +149,10 @@ export async function generateStreamResponse(
       return fullText;
 
     } catch (error: any) {
-      console.error(`Attempt ${attempts + 1} failed with key ${currentKey.substring(0, 8)}`);
-      if (error?.message?.includes('429') || error?.message?.includes('quota')) {
-        markKeyAsFailed(currentKey);
-      }
+      if (error?.message?.includes('429') || error?.message?.includes('quota')) markKeyAsFailed(currentKey);
       attempts++;
       if (attempts >= maxAttempts) {
-        const fallback = await smartHybridOfflineSearch(userMessage, subject, grade);
-        if (fallback) { onChunk(fallback); return fallback; }
+        if (offlineResult) { onChunk(offlineResult); return offlineResult; }
         return "عذراً، النظام مضغوط جداً حالياً. حاول ثانية بعد دقيقة.";
       }
     }
