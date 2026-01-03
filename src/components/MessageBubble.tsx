@@ -3,11 +3,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Message, Sender, Subject } from '../types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Bot, User, Volume2, StopCircle, Loader2, Play } from 'lucide-react';
+import { Bot, User, Volume2, StopCircle, Loader2, Play, Radio, Share2, Download } from 'lucide-react';
 import { 
   streamSpeech, 
   generateGeminiSpeech, 
   generateElevenLabsSpeech,
+  generatePodcastAudio,
   cleanMathNotation, 
   decodeBase64, 
   decodePcmAudio, 
@@ -44,11 +45,11 @@ const InteractiveText: React.FC<{ text: any, onQuote?: (t: string) => void, onPl
   );
 };
 
-// تم تعديل نوع onQuote ليكون (t: string) => void بدلاً من (t: void) => void لإصلاح أخطاء النوع
 export const MessageBubble: React.FC<{ message: Message, subject?: Subject, onQuote?: (t: string) => void }> = ({ message, subject, onQuote }) => {
   const isUser = message.sender === Sender.USER;
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isAiSpeechLoading, setIsAiSpeechLoading] = useState(false);
+  const [isPodcastLoading, setIsPodcastLoading] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
 
@@ -57,6 +58,49 @@ export const MessageBubble: React.FC<{ message: Message, subject?: Subject, onQu
     activeSourcesRef.current.forEach(s => { try { s.stop(); } catch(e) {} });
     activeSourcesRef.current.clear();
     setIsSpeaking(false);
+  };
+
+  const handleExportToNotebook = () => {
+    // تجهيز الملف للرفع
+    const content = `Subject: ${subject}\nDate: ${new Date().toLocaleDateString()}\n\n${message.text}`;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Tutor_Source_${subject}_${Date.now()}.txt`;
+    a.click();
+    // فتح الموقع
+    window.open('https://notebooklm.google.com/', '_blank');
+  };
+
+  const handlePodcast = async () => {
+    if (isSpeaking) { stopAudio(); return; }
+    setIsPodcastLoading(true);
+    setIsSpeaking(true);
+    
+    try {
+      const audioData = await generatePodcastAudio(subject || 'الدرس المختار', message.text);
+      if (audioData) {
+        if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const ctx = audioContextRef.current;
+        const buffer = await decodePcmAudio(decodeBase64(audioData), ctx, 24000, 1);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start();
+        activeSourcesRef.current.add(source);
+        source.onended = () => {
+            activeSourcesRef.current.delete(source);
+            if (activeSourcesRef.current.size === 0) setIsSpeaking(false);
+        };
+      } else {
+        setIsSpeaking(false);
+      }
+    } catch (e) {
+      setIsSpeaking(false);
+    } finally {
+      setIsPodcastLoading(false);
+    }
   };
 
   const handlePlayText = async (textToPlay: string) => {
@@ -71,30 +115,18 @@ export const MessageBubble: React.FC<{ message: Message, subject?: Subject, onQu
       if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       const ctx = audioContextRef.current;
       
-      // 1. البحث في الكاش
       const cached = await AudioCache.get(cacheKey);
       let buffer: AudioBuffer | null = null;
       
       if (cached) {
-        // إذا كان بالكاش، نفك الضغط ونشغل
         buffer = await ctx.decodeAudioData(decodeBase64(cached).buffer).catch(async () => {
-           // إذا فشل فك الضغط (ربما PCM خام من Gemini)، نستخدم محركنا الخاص
            return await decodePcmAudio(decodeBase64(cached), ctx, 24000, 1);
         });
       } else {
-        // 2. محاولة صوت Kore من Gemini
         const geminiAudio = await generateGeminiSpeech(cleanText);
         if (geminiAudio) {
           buffer = await decodePcmAudio(decodeBase64(geminiAudio), ctx, 24000, 1);
           await AudioCache.save(cacheKey, geminiAudio);
-        } else {
-          // 3. محاولة ElevenLabs كخيار بديل احترافي
-          const elevenLabsAudio = await generateElevenLabsSpeech(cleanText);
-          if (elevenLabsAudio) {
-             const audioData = decodeBase64(elevenLabsAudio);
-             buffer = await ctx.decodeAudioData(audioData.buffer);
-             await AudioCache.save(cacheKey, elevenLabsAudio);
-          }
         }
       }
       
@@ -111,7 +143,6 @@ export const MessageBubble: React.FC<{ message: Message, subject?: Subject, onQu
           if (activeSourcesRef.current.size === 0) setIsSpeaking(false); 
         };
       } else { 
-        // 4. الخيار الأخير: محرك المتصفح (معدل لضمان العربية)
         await streamSpeech(cleanText, () => setIsSpeaking(false)); 
       }
     } catch (err) { 
@@ -134,11 +165,33 @@ export const MessageBubble: React.FC<{ message: Message, subject?: Subject, onQu
           )}
           <div className={`px-4 py-3 rounded-2xl shadow-sm text-[15px] md:text-[16px] relative text-right ${isUser ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white border border-slate-100 text-slate-900 rounded-tl-none'}`}>
             {!isUser && (
-              <div className="flex justify-end gap-2 mb-2 border-b border-slate-50 pb-2 no-print">
-                <button onClick={() => handlePlayText(message.text)} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${isSpeaking ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-500'}`}>
+              <div className="flex justify-end gap-2 mb-2 border-b border-slate-50 pb-2 no-print overflow-x-auto scrollbar-hide">
+                <button onClick={() => handlePlayText(message.text)} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shrink-0 ${isSpeaking ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-500'}`}>
                   {isAiSpeechLoading ? <Loader2 size={12} className="animate-spin" /> : (isSpeaking ? <StopCircle size={12} /> : <Volume2 size={12} />)}
                   <span>{isSpeaking ? 'إيقاف' : 'استمع'}</span>
                 </button>
+                
+                {message.text.length > 250 && (
+                  <>
+                    <button 
+                      onClick={handlePodcast} 
+                      title="تحويل الشرح لبودكاست حواري"
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shrink-0 ${isPodcastLoading ? 'bg-amber-500 text-white animate-pulse' : 'bg-amber-50 text-amber-700 border border-amber-100 hover:bg-amber-100'}`}
+                    >
+                      {isPodcastLoading ? <Loader2 size={12} className="animate-spin" /> : <Radio size={12} />}
+                      <span>بودكاست الشرح</span>
+                    </button>
+                    
+                    <button 
+                      onClick={handleExportToNotebook}
+                      title="تصدير لـ NotebookLM للبحث المتعمق"
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100 transition-all shrink-0 hover:bg-blue-100"
+                    >
+                      <Share2 size={12} />
+                      <span>لـ NotebookLM</span>
+                    </button>
+                  </>
+                )}
               </div>
             )}
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
