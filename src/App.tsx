@@ -1,17 +1,18 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { GradeLevel, Subject } from './types';
+import { GradeLevel, Subject, StudyLanguage } from './types';
 import { SubjectGrid } from './components/SubjectGrid';
 import { ChatInterface } from './components/ChatInterface';
 import { SubscriptionModal } from './components/SubscriptionModal';
 import { AdminGenerator } from './components/AdminGenerator';
 import { TutorialModal } from './components/TutorialModal';
-import { School, LockKeyhole, Clock, AlertTriangle, HelpCircle, BadgePercent, Sparkles, Zap, Settings, ShieldCheck, Timer } from 'lucide-react';
+import { School, LockKeyhole, Clock, AlertTriangle, HelpCircle, BadgePercent, Sparkles, Zap, Settings, ShieldCheck, Timer, Globe } from 'lucide-react';
 import { ensureApiKey } from './utils/apiKeyManager';
 
 const App: React.FC = () => {
   const [grade, setGrade] = useState<GradeLevel | null>(null);
   const [subject, setSubject] = useState<Subject | null>(null);
+  const [studyLanguage, setStudyLanguage] = useState<StudyLanguage>(StudyLanguage.ARABIC);
   const [isAdmin, setIsAdmin] = useState(false);
   const [trialTimeLeft, setTrialTimeLeft] = useState<string>("48:00:00");
   const [subscriptionTimeLeft, setSubscriptionTimeLeft] = useState<{days: number, hours: string, label: string} | null>(null);
@@ -55,6 +56,8 @@ const App: React.FC = () => {
     const init = async () => {
       await ensureApiKey();
       checkCurrentGradeSubscription(grade);
+      const savedLang = localStorage.getItem('study_language') as StudyLanguage;
+      if (savedLang) setStudyLanguage(savedLang);
     };
     init();
 
@@ -71,9 +74,7 @@ const App: React.FC = () => {
     }
 
     const timer = setInterval(() => {
-        // فحص الاشتراك للصف النشط حالياً فقط
         const hasSub = checkCurrentGradeSubscription(grade);
-
         if (!hasSub) {
             let startStr = localStorage.getItem('trial_start_date');
             if (startStr) {
@@ -81,7 +82,6 @@ const App: React.FC = () => {
                 const endDate = new Date(startDate.getTime() + 48 * 60 * 60 * 1000); 
                 const now = new Date();
                 const diff = endDate.getTime() - now.getTime();
-
                 if (diff > 0) {
                     const h = Math.floor(diff / (1000 * 60 * 60));
                     const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
@@ -99,6 +99,11 @@ const App: React.FC = () => {
         clearInterval(timer);
     };
   }, [grade, checkCurrentGradeSubscription]);
+
+  const changeLanguage = (lang: StudyLanguage) => {
+    setStudyLanguage(lang);
+    localStorage.setItem('study_language', lang);
+  };
 
   const handleGradeSelect = (selectedGrade: GradeLevel) => {
     setGrade(selectedGrade);
@@ -139,7 +144,6 @@ const App: React.FC = () => {
         onClose={() => setIsTutorialOpen(false)}
       />
       
-      {/* الشريط العلوي يظهر فقط عند اختيار صف محدد لضمان وضوح تبعية الاشتراك */}
       {grade && (
         <div className={`w-full text-white py-2.5 px-4 no-print flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl z-[100] transition-all duration-700 ${isSubscribed ? 'bg-emerald-600 border-b-2 border-emerald-400' : 'bg-indigo-700'}`}>
           {isSubscribed ? (
@@ -161,10 +165,6 @@ const App: React.FC = () => {
                           </div>
                       </div>
                   </div>
-                  <div className="hidden lg:flex items-center gap-2 text-[11px] font-black text-emerald-100/70">
-                      <Zap size={14} className="fill-current" />
-                      تفعيل حصري لمواد {grade}
-                  </div>
               </>
           ) : (
               <>
@@ -177,13 +177,13 @@ const App: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2 text-xs sm:text-sm font-black text-center">
                     <BadgePercent size={20} className="text-yellow-400 shrink-0 animate-bounce" />
-                    <span>فعل جميع مواد {grade} بـ 90ج فقط بدلاً من 300ج!</span>
+                    <span>فعل جميع مواد {grade} بـ 90ج فقط!</span>
                   </div>
                   <button 
                     onClick={() => setIsManualSubscriptionOpen(true)}
-                    className="bg-yellow-400 hover:bg-white text-slate-900 px-6 py-1.5 rounded-xl text-xs font-black transition-all shadow-lg active:scale-95 border-b-4 border-yellow-600 hover:border-white"
+                    className="bg-yellow-400 hover:bg-white text-slate-900 px-6 py-1.5 rounded-xl text-xs font-black transition-all shadow-lg active:scale-95 border-b-4 border-yellow-600"
                   >
-                    تفعيل {grade} الآن 🚀
+                    تفعيل {grade} 🚀
                   </button>
               </>
           )}
@@ -194,6 +194,7 @@ const App: React.FC = () => {
         <ChatInterface 
             grade={grade} 
             subject={subject} 
+            studyLanguage={studyLanguage}
             onBack={handleReset} 
             onSubscribe={!isSubscribed ? () => setIsManualSubscriptionOpen(true) : undefined}
         />
@@ -206,11 +207,16 @@ const App: React.FC = () => {
               </div>
               <h1 className="text-xl font-bold text-slate-900 tracking-tight">نظام الثانوية الذكي</h1>
             </div>
-            <div className="flex items-center gap-2">
-                <button onClick={() => setIsTutorialOpen(true)} className="text-slate-600 hover:text-indigo-600 p-2 rounded-lg flex items-center gap-1">
-                   <HelpCircle size={20} />
-                   <span className="text-xs font-bold hidden sm:inline">شرح الاستخدام</span>
-                </button>
+            
+            <div className="flex items-center gap-3">
+                {/* Language Switcher */}
+                <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1">
+                   <button onClick={() => changeLanguage(StudyLanguage.ARABIC)} className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${studyLanguage === StudyLanguage.ARABIC ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>عربي</button>
+                   <button onClick={() => changeLanguage(StudyLanguage.ENGLISH)} className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${studyLanguage === StudyLanguage.ENGLISH ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>EN</button>
+                   <button onClick={() => changeLanguage(StudyLanguage.FRENCH)} className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${studyLanguage === StudyLanguage.FRENCH ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>FR</button>
+                   <button onClick={() => changeLanguage(StudyLanguage.GERMAN)} className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${studyLanguage === StudyLanguage.GERMAN ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>DE</button>
+                </div>
+                
                 <button onClick={() => setGrade(null)} className="text-sm text-indigo-600 font-bold hover:bg-indigo-50 px-4 py-2 rounded-lg">
                   تغيير الصف
                 </button>
@@ -220,7 +226,11 @@ const App: React.FC = () => {
           <main className="flex-1 max-w-6xl mx-auto w-full p-4 flex flex-col">
             <div className="text-center mb-8 mt-6">
               <h2 className="text-3xl md:text-4xl font-black text-slate-800 mb-2">اختر المادة الدراسية</h2>
-              <p className="text-lg text-slate-500 font-bold">أنت الآن في {grade}</p>
+              <div className="flex items-center justify-center gap-2">
+                 <p className="text-lg text-slate-500 font-bold">أنت الآن في {grade}</p>
+                 <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                 <p className="text-sm text-indigo-600 font-black flex items-center gap-1"><Globe size={14} /> لغة الدراسة: {studyLanguage.toUpperCase()}</p>
+              </div>
             </div>
             <SubjectGrid grade={grade} onSelect={handleSubjectSelect} />
           </main>
@@ -246,16 +256,16 @@ const App: React.FC = () => {
                 <span className="text-[#4834d4]">للتفوق النهائي</span>
               </h2>
               <p className="text-lg text-slate-500 font-bold leading-relaxed max-w-xl mb-10">
-                أول نظام تعليمي في مصر مدعوم بتقنيات Gemini 2.5 لشرح المنهج بالصوت والصورة فوراً.
+                أول نظام تعليمي في مصر يدعم طلاب "اللغات" لشرح المنهج بالإنجليزية والفرنسية والألمانية فوراً.
               </p>
               <div className="flex items-center gap-12">
                 <div className="text-right">
-                  <div className="text-3xl font-black text-[#1e293b]">95%</div>
-                  <div className="text-xs font-bold text-slate-400">دقة الشرح</div>
+                  <div className="text-3xl font-black text-[#1e293b]">98%</div>
+                  <div className="text-xs font-bold text-slate-400">دقة الترجمة</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-3xl font-black text-[#1e293b]">+12K</div>
-                  <div className="text-xs font-bold text-slate-400">طالب نشط</div>
+                  <div className="text-3xl font-black text-[#1e293b]">All Langs</div>
+                  <div className="text-xs font-bold text-slate-400">دعم كامل للمدارس</div>
                 </div>
               </div>
             </div>
@@ -286,22 +296,10 @@ const App: React.FC = () => {
           </main>
 
           <footer className="w-full max-w-7xl mx-auto p-8 border-t border-slate-100 flex flex-col md:flex-row items-center justify-between gap-6">
-            <button 
-              onClick={toggleAdmin}
-              className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-2xl font-black text-sm hover:bg-indigo-600 transition-all shadow-lg"
-            >
-              <Settings size={18} />
-              <span>دخول الإدارة (للمشرفين)</span>
-            </button>
-            
-            <div className="text-slate-400 text-[10px] font-bold text-center max-w-md">
-              <AlertTriangle size={14} className="inline ml-1" />
-              إخلاء مسؤولية: يرجى دائماً التحقق من المصادر الرسمية لوزارة التربية والتعليم.
-            </div>
-
-            <button onClick={toggleAdmin} className="opacity-10 hover:opacity-100 p-2 text-slate-400">
-              <LockKeyhole size={16} />
-            </button>
+             <div className="flex gap-4">
+                <button onClick={toggleAdmin} className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-black text-sm">دخول الإدارة</button>
+                <div className="bg-emerald-50 text-emerald-600 px-4 py-3 rounded-2xl text-xs font-bold border border-emerald-100">متاح الآن: مدارس اللغات 🇺🇸 🇫🇷 🇩🇪</div>
+             </div>
           </footer>
         </div>
       )}
