@@ -43,7 +43,7 @@ const subjectIcons: Partial<Record<Subject, React.ReactNode>> = {
   [Subject.NATIONAL_EDUCATION]: <Flag className="w-10 h-10 text-red-800" />,
 };
 
-// Re-defining data locally to ensure stability if imports fail or differ
+// هيكلة المواد الجديدة 2025/2026 (6 مواد أساسية فقط لأولى وثانية)
 const SUBJECTS_BY_GRADE: Record<GradeLevel, Subject[]> = {
   [GradeLevel.GRADE_10]: [
     Subject.ARABIC,
@@ -51,11 +51,7 @@ const SUBJECTS_BY_GRADE: Record<GradeLevel, Subject[]> = {
     Subject.MATH,
     Subject.INTEGRATED_SCIENCES,
     Subject.HISTORY,
-    Subject.PHILOSOPHY,
-    Subject.FRENCH,
-    Subject.GERMAN,
-    Subject.RELIGION,
-    Subject.NATIONAL_EDUCATION
+    Subject.PHILOSOPHY
   ],
   [GradeLevel.GRADE_11]: [
     Subject.ARABIC,
@@ -66,10 +62,7 @@ const SUBJECTS_BY_GRADE: Record<GradeLevel, Subject[]> = {
     Subject.BIOLOGY,
     Subject.HISTORY,
     Subject.GEOGRAPHY,
-    Subject.PHILOSOPHY,
-    Subject.PSYCHOLOGY,
-    Subject.FRENCH,
-    Subject.GERMAN
+    Subject.PSYCHOLOGY
   ],
   [GradeLevel.GRADE_12]: [
     Subject.ARABIC,
@@ -80,16 +73,11 @@ const SUBJECTS_BY_GRADE: Record<GradeLevel, Subject[]> = {
     Subject.BIOLOGY,
     Subject.GEOLOGY,
     Subject.HISTORY,
-    Subject.GEOGRAPHY,
-    Subject.PHILOSOPHY,
-    Subject.PSYCHOLOGY,
-    Subject.FRENCH,
-    Subject.GERMAN
+    Subject.GEOGRAPHY
   ]
 };
 
 export const SubjectGrid: React.FC<SubjectGridProps> = ({ grade, onSelect }) => {
-  // Defensive check
   const displayedSubjects = SUBJECTS_BY_GRADE[grade];
 
   if (!displayedSubjects || displayedSubjects.length === 0) {
@@ -97,10 +85,7 @@ export const SubjectGrid: React.FC<SubjectGridProps> = ({ grade, onSelect }) => 
       <div className="flex flex-col items-center justify-center p-10 bg-white rounded-xl shadow-sm border border-slate-200 mt-4 text-center">
         <AlertCircle size={48} className="text-amber-500 mb-4" />
         <h3 className="text-xl font-bold text-slate-800 mb-2">عذراً، لا توجد مواد متاحة لهذا الصف حالياً</h3>
-        <p className="text-slate-500">يرجى التأكد من اختيار الصف الدراسي الصحيح أو التواصل مع الدعم الفني.</p>
-        <div className="mt-4 p-2 bg-slate-100 rounded text-xs text-slate-400 font-mono">
-           Debug: Grade="{grade}"
-        </div>
+        <p className="text-slate-500">يرجى التأكد من اختيار الصف الدراسي الصحيح.</p>
       </div>
     );
   }
