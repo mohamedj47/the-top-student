@@ -24,6 +24,13 @@ export enum Subject {
   NATIONAL_EDUCATION = 'التربية الوطنية',
 }
 
+export enum StudyLanguage {
+  ARABIC = 'ar',
+  ENGLISH = 'en',
+  FRENCH = 'fr',
+  GERMAN = 'de'
+}
+
 export enum Sender {
   USER = 'user',
   BOT = 'model',
@@ -68,9 +75,11 @@ export interface SubjectMastery {
 export interface ChatSession {
   grade: GradeLevel;
   subject: Subject;
+  language: StudyLanguage;
 }
 
 export interface GenerationOptions {
   useThinking?: boolean;
   useSearch?: boolean;
+  language?: StudyLanguage;
 }
