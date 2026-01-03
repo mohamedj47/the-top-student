@@ -5,7 +5,7 @@ export interface CurriculumSplit {
   term1: string[];
   term2: string[];
 }
-
+ 
 export const CURRICULUM_DATA: Record<string, Record<string, CurriculumSplit>> = {
   // ==========================================
   // الصف الأول الثانوي - Grade 10
