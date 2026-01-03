@@ -4,7 +4,7 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import { questionsBank, localContentRepository, StaticQuestion } from "../lib/questionsBank";
 import { DynamicQuestionBank } from "../lib/dynamicBank";
 import { ensureApiKey, getApiKey, markKeyAsFailed } from "../utils/apiKeyManager";
-import { getCurriculumFor } from "../data/curriculum";
+import { getCurriculumStringForAI } from "../data/curriculum";
 
 export function cleanMathNotation(text: string): string {
   if (!text) return "";
@@ -92,7 +92,6 @@ export function searchInStaticBank(query: string): StaticQuestion | undefined {
 async function smartHybridOfflineSearch(query: string, subject: Subject, grade: GradeLevel, lang: StudyLanguage): Promise<string | null> {
   const normalizedQuery = query.toLowerCase().trim();
   
-  // 1. البحث في البنك الديناميكي (المخزن تلقائياً)
   const dynamicMatch = await DynamicQuestionBank.search(query, subject);
   if (dynamicMatch) {
     let prefix = "### [مسترجع من الذاكرة المحلية] 💾\n\n";
@@ -101,7 +100,6 @@ async function smartHybridOfflineSearch(query: string, subject: Subject, grade: 
     return prefix + dynamicMatch.answer;
   }
   
-  // 2. البحث في المستودع الثابت
   const repoMatch = localContentRepository.find(item => 
     item.subject === subject && item.language === lang &&
     (normalizedQuery.includes(item.topic.toLowerCase()) || item.topic.toLowerCase().includes(normalizedQuery))
@@ -124,6 +122,7 @@ export async function generateStreamResponse(
   
   const studyLang = options?.language || StudyLanguage.ARABIC;
   const offlineResult = await smartHybridOfflineSearch(userMessage, subject, grade, studyLang);
+  const curriculumStr = getCurriculumStringForAI(grade, subject);
 
   let attempts = 0;
   const maxAttempts = 3;
@@ -144,11 +143,13 @@ export async function generateStreamResponse(
       contents.push({ role: "user", parts });
 
       let sysInstr = `أنت "دكتور مادة ${subject}" للمرحلة الثانوية المصرية.
-تذكر أننا في "ليلة الامتحان". أي إجابة تقدمها يجب أن تكون شاملة ومرتبة لأنها ستخزن في "بنك الطالب" ليرجع إليها بدون إنترنت.
-ركز على:
-1. التلخيص المكثف (عصارة المادة).
-2. الأسئلة المتوقعة بنظام MCQ.
-3. شرح المسائل الصعبة بالخطوات.`;
+نحن الآن في العام الدراسي 2025/2026، ويجب أن تلتزم بالتحديثات الوزارية الأخيرة:
+- الصف الأول الثانوي يدرس مادة "العلوم المتكاملة" (المنهج الجديد الموحد).
+- الصف الثاني الثانوي تم تقليل مواده الدراسية لتصبح 6 مواد فقط لكل مسار.
+- الصف الثالث الثانوي يركز على الـ 5 مواد الأساسية في كل شعبة.
+- منهج الطالب الحالي لـ ${grade} هو:
+${curriculumStr}
+أجب دائماً بمنهج 2026 الحديث، وبأسلوب "عصارة ليلة الامتحان" المركز والذكي.`;
 
       const streamResponse = await ai.models.generateContentStream({
         model: 'gemini-3-flash-preview',
@@ -162,7 +163,6 @@ export async function generateStreamResponse(
         onChunk(cleanMathNotation(fullText));
       }
       
-      // تخزين الرد في البنك فوراً إذا كان مفيداً وطويلاً كفاية
       if (fullText.length > 50) {
         await DynamicQuestionBank.add(userMessage, fullText, subject, grade, deviceId || 'local');
       }
@@ -173,11 +173,8 @@ export async function generateStreamResponse(
       if (error?.message?.includes('429')) markKeyAsFailed(currentKey);
       attempts++;
       if (attempts >= maxAttempts) {
-        if (offlineResult) { 
-            onChunk(offlineResult); 
-            return offlineResult; 
-        }
-        return "عذراً يا بطل، الشبكة ضعيفة حالياً. سأحاول استرجاع أي معلومة مخزنة لك...";
+        if (offlineResult) { onChunk(offlineResult); return offlineResult; }
+        return "عذراً يا بطل، يبدو أن هناك ضغطاً على السيرفر. جرب مرة أخرى.";
       }
     }
   }
