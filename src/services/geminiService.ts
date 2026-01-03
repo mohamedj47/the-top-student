@@ -40,6 +40,54 @@ export async function decodePcmAudio(
   return buffer;
 }
 
+// ميزة البودكاست (Audio Overview) محاكاة لـ NotebookLM
+// تم التحديث لتقليل أخطاء 500 عبر استخدام أسماء لاتينية للمتحدثين
+export async function generatePodcastAudio(topic: string, content: string): Promise<string | null> {
+  const currentApiKey = getApiKey();
+  try {
+    const ai = new GoogleGenAI({ apiKey: currentApiKey });
+    
+    // استخدام أسماء لاتينية في الـ Label لضمان استقرار محرك الـ TTS
+    const prompt = `Convert the following educational content into an engaging podcast dialogue in ARABIC between two characters:
+      Kareem: The teacher, explains things clearly and kindly.
+      Noha: The brilliant student, asks insightful questions and summarizes points.
+      
+      Structure the output exactly like this for the TTS engine:
+      Kareem: [Arabic Text]
+      Noha: [Arabic Text]
+      
+      Topic: ${topic}
+      Content: ${content}
+      
+      Ensure the conversation is natural, educational, and helpful for a high school student.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          multiSpeakerVoiceConfig: {
+            speakerVoiceConfigs: [
+              { speaker: 'Kareem', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
+              { speaker: 'Noha', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
+            ]
+          }
+        },
+      },
+    });
+
+    const audioData = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+    return audioData || null;
+  } catch (e: any) {
+    console.error("Podcast Gen Error Detail:", e);
+    if (e?.message?.includes('500') || e?.message?.includes('INTERNAL')) {
+      console.warn("Detected Internal Server Error in TTS Preview Model.");
+    }
+    return null;
+  }
+}
+
 export async function generateGeminiSpeech(text: string): Promise<string | null> {
   try {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
@@ -146,7 +194,7 @@ export async function generateStreamResponse(
 تذكر أن اللغة الألمانية واللغة الفرنسية هما لغتان أجنبيتان ثانيتان اختياريتان، ويجب شرح القواعد والمفردات والمواقف بدقة متناهية.
 - المنهج الحالي لـ ${grade} في هذه المادة هو:
 ${curriculumStr}
-التزم بأسلوب "عصارة ليلة الامتحان" المختصر والذكي جداً لضمان تفوق الطالب.`;
+التزم بأسلوب "عصارة ليلة الامتحان" المختصر والذكاء جداً.`;
 
       const streamResponse = await ai.models.generateContentStream({
         model: 'gemini-3-flash-preview',
