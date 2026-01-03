@@ -1,5 +1,5 @@
 
-import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender } from "../types";
+import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender, StudyLanguage } from "../types";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { questionsBank, localContentRepository, StaticQuestion } from "../lib/questionsBank";
 import { DynamicQuestionBank } from "../lib/dynamicBank";
@@ -12,35 +12,42 @@ export function cleanMathNotation(text: string): string {
 }
 
 /**
- * البحث الذكي الشامل: يبحث في البنك الثابت، ثم الديناميكي، ثم في فهرس المنهج
+ * البحث الهجين الذكي (Offline/Hybrid Search)
+ * يبحث في الذاكرة الديناميكية والمستودع الثابت مع مراعاة اللغة
  */
-async function smartHybridOfflineSearch(query: string, subject: Subject, grade: GradeLevel): Promise<string | null> {
-  // 1. البحث في الأسئلة التي تمت إجابتها سابقاً (الذاكرة النشطة)
-  const dynamicMatch = await DynamicQuestionBank.search(query, subject);
-  if (dynamicMatch) return `### [إجابة مسترجعة من الذاكرة الذكية] 💾\n\n${dynamicMatch.answer}`;
+async function smartHybridOfflineSearch(query: string, subject: Subject, grade: GradeLevel, lang: StudyLanguage): Promise<string | null> {
+  const normalizedQuery = query.toLowerCase().trim();
   
-  // 2. البحث في المستودع المعرفي الثابت
+  // 1. البحث في الذاكرة الديناميكية (الأسئلة السابقة)
+  const dynamicMatch = await DynamicQuestionBank.search(query, subject);
+  if (dynamicMatch) return `### [Memory Recall] 💾\n\n${dynamicMatch.answer}`;
+  
+  // 2. البحث في المستودع الثابت (مع فلترة باللغة المختارة)
   const repoMatch = localContentRepository.find(item => 
-    item.subject === subject && query.toLowerCase().includes(item.topic.toLowerCase())
+    item.subject === subject && 
+    item.language === lang &&
+    (normalizedQuery.includes(item.topic.toLowerCase()) || item.topic.toLowerCase().includes(normalizedQuery))
   );
-  if (repoMatch) return `### [محتوى أوفلاين متاح] 📚\n\n${repoMatch.explanation}`;
+  
+  if (repoMatch) {
+    return `### [Local Content - ${lang.toUpperCase()}] 📚\n\n${repoMatch.explanation}\n\n**Summary:** ${repoMatch.summary}\n\n**Key Points:** ${repoMatch.keyPoints}`;
+  }
 
-  // 3. البحث في فهرس المنهج (البيانات التي أرسلتها أنت)
+  // 3. البحث في فهرس المنهج
   const curriculum = getCurriculumFor(grade, subject);
   const allLessons = [...curriculum.term1, ...curriculum.term2];
-  const lessonMatch = allLessons.find(lesson => query.includes(lesson.split(':')[0]));
+  const lessonMatch = allLessons.find(lesson => normalizedQuery.includes(lesson.toLowerCase().split(':')[0]));
   
   if (lessonMatch) {
-    return `### [معلومات المنهج] 📖\n\nبناءً على خطة الوزارة، درس **"${lessonMatch}"** هو جزء أساسي من منهجك. \n\n*نصيحة: المعلم الذكي يحاول الاتصال بالخادم الآن لإعطائك الشرح الكامل، يرجى المحاولة بعد لحظات أو تصفح ملخصات الدروس الأخرى.*`;
+    const msg = lang === StudyLanguage.ARABIC 
+      ? `هذا الدرس موجود في منهجك. يرجى الاتصال بالإنترنت للحصول على الشرح الكامل.` 
+      : `This lesson is part of your curriculum. Please connect to the internet for a full AI explanation in ${lang.toUpperCase()}.`;
+    return `### [Curriculum Info] 📖\n\n**${lessonMatch}**\n\n${msg}`;
   }
 
   return null;
 }
 
-// إضافة وظيفة البحث في البنك الثابت لإصلاح خطأ الاستيراد في app/page.tsx
-/**
- * البحث في بنك الأسئلة الثابت
- */
 export function searchInStaticBank(query: string): StaticQuestion | null {
   const normalizedQuery = query.toLowerCase().trim();
   return questionsBank.find(q => 
@@ -75,14 +82,14 @@ export function sanitizeForSpeech(text: string): string {
 
 export async function generateGeminiSpeech(text: string): Promise<string | null> {
   let attempts = 0;
-  const maxAttempts = 3;
+  const maxAttempts = 2;
   while (attempts < maxAttempts) {
     const currentKey = getApiKey();
     try {
       const ai = new GoogleGenAI({ apiKey: currentKey });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `بأسلوب معلم، انطق بوضوح: ${text}` }] }],
+        contents: [{ parts: [{ text: `Say clearly: ${text}` }] }],
         config: { responseModalities: [Modality.AUDIO], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } } },
       });
       return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
@@ -94,6 +101,10 @@ export async function generateGeminiSpeech(text: string): Promise<string | null>
   return null;
 }
 
+/**
+ * إضافة دالة توليد الصوت باستخدام ElevenLabs كخيار احترافي بديل
+ * يتم استدعاؤها عبر الـ API الداخلي للتعامل مع المفاتيح بسرية
+ */
 export async function generateElevenLabsSpeech(text: string): Promise<string | null> {
   try {
     const response = await fetch('/api/voice', {
@@ -107,7 +118,10 @@ export async function generateElevenLabsSpeech(text: string): Promise<string | n
     let binary = '';
     for (let i = 0; i < bytes.byteLength; i++) { binary += String.fromCharCode(bytes[i]); }
     return btoa(binary);
-  } catch (error) { return null; }
+  } catch (e) {
+    console.error("ElevenLabs Proxy Error:", e);
+    return null;
+  }
 }
 
 export async function generateStreamResponse(
@@ -115,7 +129,8 @@ export async function generateStreamResponse(
   onChunk: (text: string) => void, attachment?: Attachment, options?: GenerationOptions, deviceId?: string
 ): Promise<string> {
   
-  const offlineResult = await smartHybridOfflineSearch(userMessage, subject, grade);
+  const studyLang = options?.language || StudyLanguage.ARABIC;
+  const offlineResult = await smartHybridOfflineSearch(userMessage, subject, grade, studyLang);
 
   let attempts = 0;
   const maxAttempts = 3;
@@ -127,16 +142,25 @@ export async function generateStreamResponse(
       const parts: any[] = [{ text: userMessage }];
       if (attachment?.type === 'image') parts.push({ inlineData: { mimeType: attachment.mimeType, data: attachment.data } });
 
-      const contents = history.slice(-3).map(msg => ({
+      const contents = history.slice(-5).map(msg => ({
         role: msg.sender === Sender.USER ? 'user' : 'model',
         parts: [{ text: msg.text }]
       }));
       contents.push({ role: "user", parts });
 
+      // تعليمات صارمة للغة الدراسة
+      let sysInstr = `أنت معلم مصري تشرح المنهج باللغة العربية.`;
+      if (studyLang === StudyLanguage.ENGLISH) sysInstr = `You are an Egyptian teacher for a Language School. Explaining Grade ${grade} - ${subject}. ALWAYS use English scientific terms and explain in English. Be professional and supportive. If a test is requested, provide 10 MCQs in English.`;
+      if (studyLang === StudyLanguage.FRENCH) sysInstr = `Tu es un professeur égyptien pour écoles de langues. Explique ${subject} en Français. Utilise les termes scientifiques français. Crée des QCM si demandé.`;
+      if (studyLang === StudyLanguage.GERMAN) sysInstr = `Du bist ein Lehrer für Sprachschulen in Ägypten. Erkläre ${subject} auf Deutsch. Nutze deutsche Fachbegriffe. Erstelle MC-Fragen bei Bedarf.`;
+
+      const isExam = userMessage.toLowerCase().includes('test') || userMessage.toLowerCase().includes('exam') || userMessage.includes('امتحان');
+      const modifier = isExam ? " (Format: Mock MCQ Exam with answers at the end)" : " (Format: Clear explanation with tables/bullet points)";
+
       const streamResponse = await ai.models.generateContentStream({
         model: 'gemini-3-flash-preview',
         contents,
-        config: { systemInstruction: `أنت معلم مصري لصف ${grade} مادة ${subject}. اجابتك مختصرة ومركزة وتدعم الطالب.` }
+        config: { systemInstruction: `${sysInstr} ${modifier}` }
       });
 
       let fullText = "";
@@ -149,15 +173,15 @@ export async function generateStreamResponse(
       return fullText;
 
     } catch (error: any) {
-      if (error?.message?.includes('429') || error?.message?.includes('quota')) markKeyAsFailed(currentKey);
+      if (error?.message?.includes('429')) markKeyAsFailed(currentKey);
       attempts++;
       if (attempts >= maxAttempts) {
         if (offlineResult) { onChunk(offlineResult); return offlineResult; }
-        return "عذراً، النظام مضغوط جداً حالياً. حاول ثانية بعد دقيقة.";
+        return studyLang === StudyLanguage.ARABIC ? "عذراً، النظام مضغوط. حاول ثانية." : "System busy. Please try again in a minute.";
       }
     }
   }
-  return "خطأ غير متوقع.";
+  return "...";
 }
 
 export async function streamSpeech(text: string, onComplete?: () => void): Promise<void> {
@@ -165,7 +189,12 @@ export async function streamSpeech(text: string, onComplete?: () => void): Promi
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(sanitizeForSpeech(text));
   const voices = window.speechSynthesis.getVoices();
-  utterance.voice = voices.find(v => v.lang.startsWith('ar')) || null;
+  // تحديد الصوت بناءً على النص (محاولة بسيطة)
+  if (text.match(/[a-zA-Z]/)) {
+     utterance.voice = voices.find(v => v.lang.startsWith('en')) || null;
+  } else {
+     utterance.voice = voices.find(v => v.lang.startsWith('ar')) || null;
+  }
   utterance.onend = () => onComplete?.();
   window.speechSynthesis.speak(utterance);
 }
