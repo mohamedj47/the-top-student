@@ -1,10 +1,11 @@
 
-import { Subject, GradeLevel } from '../types';
+import { Subject, GradeLevel, StudyLanguage } from '../types';
 
 export interface StaticContent {
   topic: string;
   subject: Subject;
   grade: GradeLevel;
+  language: StudyLanguage;
   explanation: string;
   summary: string;
   practice: string;
@@ -12,157 +13,109 @@ export interface StaticContent {
 }
 
 /**
- * المستودع المعرفي الذهبي (Offline Encyclopedia)
- * يحتوي على جوهر المناهج لجميع المواد لضمان عدم توقف الطالب
+ * المستودع المعرفي الذهبي الشامل (Global Offline Repository)
+ * يحتوي على ملخصات الدروس الأساسية لجميع اللغات والصفوف لضمان العمل بدون إنترنت
  */
 export const localContentRepository: StaticContent[] = [
-  // --- اللغة الإنجليزية (Grade 10) ---
+  // ================= ENGLISH (Language Schools) =================
   {
-    topic: "Unit 1: Getting away",
-    subject: Subject.ENGLISH,
-    grade: GradeLevel.GRADE_10,
-    explanation: `### Unit 1: Ecotourism (English)
-| Word | Meaning |
-| :--- | :--- |
-| **Ecotourism** | السياحة البيئية |
-| **Sustainable** | مستدام / صديق للبيئة |
-| **Endangered** | مهدد بالانقراض |
-| **Impact** | تأثير |
-
-**Grammar (الماضي البسيط والمستمر):**
-- **Past Simple:** حدث انتهى (I played).
-- **Past Continuous:** حدث كان مستمراً (I was playing).`,
-    summary: `استخدم While مع الماضي المستمر و When مع الماضي البسيط في الغالب.`,
-    practice: `While I (read / was reading), the phone rang.`,
-    keyPoints: "السياحة البيئية تحمي الطبيعة والسكان المحليين."
+    topic: "Organic Chemistry",
+    subject: Subject.CHEMISTRY,
+    grade: GradeLevel.GRADE_12,
+    language: StudyLanguage.ENGLISH,
+    explanation: `### Organic Chemistry: Alkanes, Alkenes, and Alkynes
+- **Alkanes (CnH2n+2):** Saturated hydrocarbons, single bonds only. (e.g., Methane CH4).
+- **Alkenes (CnH2n):** Unsaturated, at least one double bond. (e.g., Ethene C2H4).
+- **Alkynes (CnH2n-2):** Unsaturated, at least one triple bond. (e.g., Ethyne C2H2).`,
+    summary: `Identify by bonds: Single = -ane, Double = -ene, Triple = -yne.`,
+    practice: `Formula for Propane? (C3H8).`,
+    keyPoints: "Carbon always forms 4 bonds."
+  },
+  {
+    topic: "Ohm's Law",
+    subject: Subject.PHYSICS,
+    grade: GradeLevel.GRADE_12,
+    language: StudyLanguage.ENGLISH,
+    explanation: `### Ohm's Law & Electric Circuits
+**Formula:** V = I × R
+- **V (Voltage):** Measured in Volts (V).
+- **I (Current):** Measured in Amperes (A).
+- **R (Resistance):** Measured in Ohms (Ω).`,
+    summary: `V = IR. To increase current, increase voltage or decrease resistance.`,
+    practice: `If V=10V and R=2Ω, I = ? (Ans: 5A).`,
+    keyPoints: "Ohmic conductors have constant resistance at constant temperature."
+  },
+  {
+    topic: "DNA Structure",
+    subject: Subject.BIOLOGY,
+    grade: GradeLevel.GRADE_12,
+    language: StudyLanguage.ENGLISH,
+    explanation: `### DNA: The Genetic Material
+DNA consists of two strands forming a double helix.
+- **Nucleotides:** Sugar, Phosphate, and a Nitrogenous Base.
+- **Base Pairs:** Adenine (A) pairs with Thymine (T), Guanine (G) pairs with Cytosine (C).`,
+    summary: `A=T (2 bonds), G≡C (3 bonds).`,
+    practice: `If Adenine is 20%, what is Cytosine? (Ans: 30%).`,
+    keyPoints: "DNA replication is semi-conservative."
   },
 
-  // --- اللغة العربية (Grade 10) ---
+  // ================= FRENCH (Écoles de Langues) =================
   {
-    topic: "كان وأخواتها",
-    subject: Subject.ARABIC,
-    grade: GradeLevel.GRADE_10,
-    explanation: `### الأفعال الناقصة والتامة
-| الفعل | عمله | مثال |
-| :--- | :--- | :--- |
-| **كان** | ترفع المبتدأ وتنصب الخبر | كان الجوُّ بارداً |
-| **أصبح** | التوقيت بالصباح | أصبح الطالبُ نشيطاً |
-| **ليس** | النفي | ليس الامتحانُ صعباً |
-
-**القاعدة التامة:** إذا اكتفت كان بفاعلها فهي تامة (فسبحان الله حين تمسون).`,
-    summary: `أفعال الاستمرار (ما زال، ما برح..) لابد أن تسبق بنفي.`,
-    practice: `أعرب: "أصبح الصبحُ". (الصبح: فاعل لأن أصبح هنا تامة).`,
-    keyPoints: "الناقصة تحتاج لخبر، والتامة تكتفي بفاعلها."
+    topic: "Chimie Organique",
+    subject: Subject.CHEMISTRY,
+    grade: GradeLevel.GRADE_12,
+    language: StudyLanguage.FRENCH,
+    explanation: `### Chimie Organique: Alcanes, Alcènes et Alcynes
+- **Alcanes (CnH2n+2):** Hydrocarbures saturés (ex: Méthane CH4).
+- **Alcènes (CnH2n):** Insaturés avec double liaison (ex: Éthène C2H4).
+- **Alcynes (CnH2n-2):** Insaturés avec triple liaison.`,
+    summary: `Alcane = Simple, Alcène = Double, Alcyne = Triple.`,
+    practice: `Formule du Butane? (C4H10).`,
+    keyPoints: "Le carbone est tétravalent."
   },
 
-  // --- الكيمياء (Grade 12) ---
+  // ================= GERMAN (Sprachschulen) =================
+  {
+    topic: "Ohmsches Gesetz",
+    subject: Subject.PHYSICS,
+    grade: GradeLevel.GRADE_12,
+    language: StudyLanguage.GERMAN,
+    explanation: `### Ohmsches Gesetz (U = R * I)
+- **U:** Elektrische Spannung (Volt).
+- **I:** Elektrische Stromstärke (Ampere).
+- **R:** Elektrischer Widerstand (Ohm).`,
+    summary: `U = R * I ist die Grundformel der Elektrotechnik.`,
+    practice: `U=12V, R=4 Ohm -> I=? (Antwort: 3A).`,
+    keyPoints: "Widerstand ist Materialabhängig."
+  },
+
+  // ================= ARABIC (المحتوى العربي الأصلي) =================
   {
     topic: "الكيمياء العضوية",
     subject: Subject.CHEMISTRY,
     grade: GradeLevel.GRADE_12,
-    explanation: `### مقدمة الكيمياء العضوية (الهيدروكربونات)
-| السلسلة | القانون العام | الرابطة | مثال |
-| :--- | :--- | :--- | :--- |
-| **الألكانات** | CnH2n+2 | أحادية | ميثان CH4 |
-| **الألكينات** | CnH2n | ثنائية | إيثين C2H4 |
-| **الألكاينات** | CnH2n-2 | ثلاثية | إيثاين C2H2 |
-
-**تفاعلات هامة:**
-- **الهدرجة:** إضافة هيدروجين لتحويل غير المشبع لمشبع.
-- **الاحتراق:** ينتج دائماً CO2 وبخار ماء وطاقة.`,
-    summary: `تذكر ترتيب الأعداد اللاتينية: ميث، إيث، بروب، بيوت، بنت، هيكس...`,
-    practice: `ما هو القانون العام للألكاينات؟ (CnH2n-2).`,
-    keyPoints: "الكربون دائماً رباعي التكافؤ."
+    language: StudyLanguage.ARABIC,
+    explanation: `### الكيمياء العضوية: الألكانات والألكينات والألكاينات
+- **الألكانات (CnH2n+2):** هيدروكربونات مشبعة، روابط أحادية فقط (مثل الميثان CH4).
+- **الألكينات (CnH2n):** غير مشبعة، تحتوي على رابطة مزدوجة (مثل الإيثين C2H4).
+- **الألكاينات (CnH2n-2):** غير مشبعة، تحتوي على رابطة ثلاثية (مثل الإيثاين C2H2).`,
+    summary: `أحادية = ألكان، ثنائية = ألكين، ثلاثية = ألكاين.`,
+    practice: `ما هي صيغة البروبان؟ (C3H8).`,
+    keyPoints: "ذرة الكربون رباعية التكافؤ دائماً."
   },
-
-  // --- الأحياء (Grade 12) ---
-  {
-    topic: "تركيب DNA",
-    subject: Subject.BIOLOGY,
-    grade: GradeLevel.GRADE_12,
-    explanation: `### الحمض النووي DNA
-يتكون النيوكليوتيد من:
-1. سكر خماسي (ديوكسي ريبوز).
-2. مجموعة فوسفات.
-3. قاعدة نيتروجينية.
-
-**القواعد والازدواج:**
-- **A** (أدينين) ترتبط بـ **T** (ثايمين) بـ 2 رابطة هيدروجينية.
-- **G** (جوانين) ترتبط بـ **C** (سيتوزين) بـ 3 روابط هيدروجينية.`,
-    summary: `الـ DNA لولب مزدوج، شريطاه متعاكسان (5'->3' و 3'->5').`,
-    practice: `إذا كانت نسبة A = 20%، فكم تكون نسبة G؟ (الحل: 30%).`,
-    keyPoints: "تضاعف DNA يحدث في طور السكون قبل الانقسام."
-  },
-
-  // --- التاريخ (Grade 12) ---
-  {
-    topic: "الحملة الفرنسية",
-    subject: Subject.HISTORY,
-    grade: GradeLevel.GRADE_12,
-    explanation: `### الحملة الفرنسية على مصر (1798)
-| القائد | أهم حدث | النهاية |
-| :--- | :--- | :--- |
-| **نابليون** | موقعة أبي قير البحرية | رحل سراً |
-| **كليبر** | ثورة القاهرة الثانية | قُتل على يد سليمان الحلبي |
-| **مينو** | أراد البقاء (المشروع العظيم) | استسلم ورحل 1801 |
-
-**النتائج العلمية:**
-- كتاب وصف مصر.
-- فك رموز حجر رشيد (شامبليون).
-- مجمع علمي مصري.`,
-    summary: `الحملة الفرنسية لفتت أنظار إنجلترا لأهمية موقع مصر.`,
-    practice: `بم تفسر فشل نابليون في دخول عكا؟ (بسالة أهلها بقيادة أحمد باشا الجزار).`,
-    keyPoints: "الحملة كانت عسكرية وعلمية في آن واحد."
-  },
-
-  // --- الفيزياء (Grade 12) ---
   {
     topic: "قانون أوم",
     subject: Subject.PHYSICS,
     grade: GradeLevel.GRADE_12,
-    explanation: `### قانون أوم وقانونا كيرشوف
-| القانون | الصيغة الرياضية | الاستخدام |
-| :--- | :--- | :--- |
-| **أوم** | V = I * R | حساب الجهد والتيار |
-| **كيرشوف 1** | ΣI in = ΣI out | حفظ الشحنة (نقطة تفرع) |
-| **كيرشوف 2** | ΣV = ΣIR | حفظ الطاقة (مسار مغلق) |`,
-    summary: `المقاومة النوعية تتوقف فقط على نوع المادة ودرجة الحرارة.`,
-    practice: `سلك طوله زاد للضعف، ماذا يحدث لمقاومته؟ (تزداد للأربعة أمثال إذا قل القطر للنصف).`,
-    keyPoints: "التيار يختار دائماً الطريق الأقل مقاومة."
-  },
-
-  // --- الجغرافيا (Grade 12) ---
-  {
-    topic: "الجغرافيا السياسية",
-    subject: Subject.GEOGRAPHY,
-    grade: GradeLevel.GRADE_12,
-    explanation: `### مفهوم الجغرافيا السياسية
-هي فرع من الجغرافيا البشرية يهتم بدراسة **المقومات الطبيعية والبشرية** للدولة وتأثير ذلك في قوتها السياسية.
-
-**أبرز العلماء:**
-1. **أرسطو:** حدد عناصر الدولة المثالية في 5 عناصر.
-2. **ابن خلدون:** وضع "دورة حياة الدولة" (نشأة، شباب، نضج، اضمحلال).
-3. **راتزل:** اعتبر الدولة "كائناً حياً" تنطبق عليه قوانين الميلاد والنمو والوفاة.`,
-    summary: `الجيوبوليتيك (رودلف كيلين) تركز على التوسع الخارجي، بينما الجغرافيا السياسية تدرس الدولة كما هي.`,
-    practice: `ما الفرق بين الدولة والأمة؟ (الأمة لا تتطلب سلطة حاكمة موحدة عكس الدولة).`,
-    keyPoints: "النظام العالمي الجديد يتسم بالشمولية والعولمة."
-  },
-
-  // --- الرياضيات (Grade 10) ---
-  {
-    topic: "الأعداد المركبة",
-    subject: Subject.MATH,
-    grade: GradeLevel.GRADE_10,
-    explanation: `### مقدمة الأعداد المركبة (ت)
-| المقدار | القيمة |
-| :--- | :--- |
-| **ت** | √-1 |
-| **ت²** | -1 |
-| **ت³** | -ت |
-| **ت⁴** | 1 |`,
-    summary: `أي (ت) مرفوعة لأس يقبل القسمة على 4 قيمتها 1.`,
-    practice: `أوجد قيمة ت^25؟ الحل: ت.`,
-    keyPoints: "العدد المركب يتكون من جزء حقيقي وجزء تخيلي."
+    language: StudyLanguage.ARABIC,
+    explanation: `### قانون أوم والدوائر الكهربائية
+**الصيغة:** V = I × R
+- **V (فرق الجهد):** بالفولت.
+- **I (شدة التيار):** بالأمبير.
+- **R (المقاومة):** بالأوم.`,
+    summary: `العلاقة طردية بين الجهد والتيار عند ثبوت المقاومة.`,
+    practice: `إذا كان الجهد 20 فولت والمقاومة 5 أوم، احسب التيار. (الإجابة: 4 أمبير).`,
+    keyPoints: "تزداد المقاومة بزيادة طول السلك ونقص مساحة مقطعه."
   }
 ];
 
@@ -183,20 +136,8 @@ export const questionsBank: StaticQuestion[] = [
     difficulty: 'easy',
     readingTime: '2 دقيقة',
     answer: `### نصائح ذهبية للتفوق:
-1. ابدأ يومك بالفجر (وقت البركة).
-2. استخدم تقنية البومودورو (25 دقيقة مذاكرة + 5 راحة).
-3. لخص كل درس في ورقة واحدة (خريطة ذهنية).
-4. اشرح ما تعلمته لزميلك أو لنفسك في المرآة.`
-  },
-  {
-    question: "كيفية التعامل مع ورقة الامتحان",
-    subject: Subject.ARABIC,
-    grade: GradeLevel.GRADE_12,
-    difficulty: 'medium',
-    readingTime: '3 دقائق',
-    answer: `### استراتيجية الحل المثالية:
-1. **قراءة المسح الشامل**: اقرأ الورقة كاملة في 5 دقائق لتحديد الأسئلة السهلة.
-2. **قاعدة الـ 60 ثانية**: إذا توقفت عند سؤال لأكثر من دقيقة، اتركه وانتقل لغيره فوراً.
-3. **التظليل (البابل شيت)**: ظلل إجاباتك أولاً بأول، ولا تنتظر لآخر الوقت لتجنب التوتر والخطأ في الترتيب.`
+1. ابدأ يومك بالفجر.
+2. استخدم تقنية البومودورو.
+3. لخص كل درس في خريطة ذهنية.`
   }
 ];
