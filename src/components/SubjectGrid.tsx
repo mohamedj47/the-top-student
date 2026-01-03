@@ -43,11 +43,12 @@ const subjectIcons: Partial<Record<Subject, React.ReactNode>> = {
   [Subject.NATIONAL_EDUCATION]: <Flag className="w-10 h-10 text-red-800" />,
 };
 
-// هيكلة المواد الجديدة 2025/2026 (6 مواد أساسية فقط لأولى وثانية)
 const SUBJECTS_BY_GRADE: Record<GradeLevel, Subject[]> = {
   [GradeLevel.GRADE_10]: [
     Subject.ARABIC,
     Subject.ENGLISH,
+    Subject.FRENCH,
+    Subject.GERMAN,
     Subject.MATH,
     Subject.INTEGRATED_SCIENCES,
     Subject.HISTORY,
@@ -56,6 +57,8 @@ const SUBJECTS_BY_GRADE: Record<GradeLevel, Subject[]> = {
   [GradeLevel.GRADE_11]: [
     Subject.ARABIC,
     Subject.ENGLISH,
+    Subject.FRENCH,
+    Subject.GERMAN,
     Subject.MATH,
     Subject.PHYSICS,
     Subject.CHEMISTRY,
@@ -67,6 +70,8 @@ const SUBJECTS_BY_GRADE: Record<GradeLevel, Subject[]> = {
   [GradeLevel.GRADE_12]: [
     Subject.ARABIC,
     Subject.ENGLISH,
+    Subject.FRENCH,
+    Subject.GERMAN,
     Subject.MATH,
     Subject.PHYSICS,
     Subject.CHEMISTRY,
