@@ -40,26 +40,32 @@ export async function decodePcmAudio(
   return buffer;
 }
 
-// ميزة البودكاست (Audio Overview) محاكاة لـ NotebookLM
-// تم التحديث لتقليل أخطاء 500 عبر استخدام أسماء لاتينية للمتحدثين
+/**
+ * ميزة البودكاست التعليمي الفائق
+ * تم تطوير البرومبت ليركز على "تركات الامتحانات" والربط المنطقي للمعلومات
+ */
 export async function generatePodcastAudio(topic: string, content: string): Promise<string | null> {
   const currentApiKey = getApiKey();
   try {
     const ai = new GoogleGenAI({ apiKey: currentApiKey });
     
-    // استخدام أسماء لاتينية في الـ Label لضمان استقرار محرك الـ TTS
-    const prompt = `Convert the following educational content into an engaging podcast dialogue in ARABIC between two characters:
-      Kareem: The teacher, explains things clearly and kindly.
-      Noha: The brilliant student, asks insightful questions and summarizes points.
+    const prompt = `أنت خبير في تحويل المحتوى التعليمي إلى بودكاست تفاعلي عالي الجودة لطلاب الثانوية العامة المصرية 2026.
+      المطلوب: تحويل المحتوى أدناه إلى حوار ممتع وعميق باللغة العربية (اللهجة المصرية البيضاء المفهومة) بين شخصيتين:
+      كريم (Kareem): المعلم الخبير، يشرح المفاهيم بربطها بالواقع وبأسلوب "تركات الامتحان".
+      نهى (Noha): الطالبة الذكية، تسأل أسئلة ذكية وتطلب توضيح النقاط الصعبة وتلخص ما فهمته.
       
-      Structure the output exactly like this for the TTS engine:
-      Kareem: [Arabic Text]
-      Noha: [Arabic Text]
+      يجب أن يتضمن البودكاست:
+      1. شرح عميق للمفاهيم الأساسية بعيداً عن التلقين.
+      2. تسليط الضوء على "تركات" نظام التقييم الجديد المتوقعة لهذا الجزء.
+      3. نصائح للحفظ أو الفهم السريع (Mnemonics).
+      4. تلخيص نهائي مركز لأهم نقاط الدرس في شكل "كبسولة التفوق".
+
+      التزم تماماً بالتنسيق التالي لمحرك الـ TTS:
+      Kareem: [نص الشرح]
+      Noha: [نص السؤال أو التلخيص]
       
-      Topic: ${topic}
-      Content: ${content}
-      
-      Ensure the conversation is natural, educational, and helpful for a high school student.`;
+      الموضوع: ${topic}
+      المحتوى: ${content}`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
@@ -80,10 +86,7 @@ export async function generatePodcastAudio(topic: string, content: string): Prom
     const audioData = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
     return audioData || null;
   } catch (e: any) {
-    console.error("Podcast Gen Error Detail:", e);
-    if (e?.message?.includes('500') || e?.message?.includes('INTERNAL')) {
-      console.warn("Detected Internal Server Error in TTS Preview Model.");
-    }
+    console.error("Podcast Gen Error:", e);
     return null;
   }
 }
