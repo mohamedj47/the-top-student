@@ -1,7 +1,7 @@
 
 import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender, StudyLanguage } from "../types";
 import { GoogleGenAI, Modality } from "@google/genai";
-import { questionsBank, localContentRepository, StaticQuestion } from "../lib/questionsBank";
+import { questionsBank, localContentRepository, StaticQuestion } from "../lib/questionsBank";   
 import { DynamicQuestionBank } from "../lib/dynamicBank";
 import { ensureApiKey, getApiKey, markKeyAsFailed } from "../utils/apiKeyManager";
 import { getCurriculumStringForAI } from "../data/curriculum";
