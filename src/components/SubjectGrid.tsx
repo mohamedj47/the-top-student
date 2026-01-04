@@ -52,7 +52,8 @@ const SUBJECTS_BY_GRADE: Record<GradeLevel, Subject[]> = {
     Subject.MATH,
     Subject.INTEGRATED_SCIENCES,
     Subject.HISTORY,
-    Subject.PHILOSOPHY
+    Subject.PHILOSOPHY,
+    Subject.RELIGION
   ],
   [GradeLevel.GRADE_11]: [
     Subject.ARABIC,
