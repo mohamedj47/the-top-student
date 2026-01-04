@@ -9,7 +9,7 @@ import { DynamicQuestionBank, DynamicQuestion } from '../lib/dynamicBank';
 import { 
   Send, ChevronRight, List, Bot, Loader2, BookText, 
   Trophy, HelpCircle, Target, Mic, Camera, Paperclip, X, CheckCircle, GraduationCap,
-  Sparkles, FileText, FileSearch, Heart, Youtube, Database, History, Clock
+  Sparkles, FileText, FileSearch, Heart, Youtube, Database, History, Clock, Brain
 } from 'lucide-react';
 
 const LessonBrowser = React.lazy(() => import('./LessonBrowser').then(module => ({ default: module.LessonBrowser })));
@@ -227,6 +227,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
         )}
 
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          <QuickTool 
+            icon={Brain} 
+            label={studyLanguage === StudyLanguage.ARABIC ? "أسئلة الدرس المتوقعة" : "Lesson Forecast Qs"} 
+            color="text-violet-600 border-violet-100 bg-violet-50/30" 
+            prompt={studyLanguage === StudyLanguage.ARABIC ? `بناءً على الدرس الذي شرحته لي للتو أو ناقشناه، أريد "الأسئلة النهائية" التي تضمن لي فهم الدرس بنسبة 100%. وفر لي أهم وأصعب التركات المتوقعة في الامتحان لهذا الدرس تحديداً مع الإجابات النموذجية.` : `Based on the lesson we just discussed, generate the "Ultimate Questions" that guarantee 100% mastery. Provide the most expected and challenging exam-style questions for this specific lesson with ideal answers.`} 
+          />
           <QuickTool 
             icon={Sparkles} 
             label={studyLanguage === StudyLanguage.ARABIC ? "عصارة ليلة الامتحان" : "Final Night Booklet"} 
