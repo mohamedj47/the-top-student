@@ -1,7 +1,7 @@
 
 import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender, StudyLanguage } from "../types";
 import { GoogleGenAI, Modality } from "@google/genai";
-import { questionsBank, localContentRepository, StaticQuestion } from "../lib/questionsBank";   
+import { questionsBank, localContentRepository, StaticQuestion } from "../lib/questionsBank";
 import { DynamicQuestionBank } from "../lib/dynamicBank";
 import { ensureApiKey, getApiKey, markKeyAsFailed } from "../utils/apiKeyManager";
 import { getCurriculumStringForAI } from "../data/curriculum";
@@ -14,7 +14,7 @@ export function cleanMathNotation(text: string): string {
 export function decodeBase64(base64: string): Uint8Array {
   const binaryString = atob(base64);
   const len = binaryString.length;
-  const bytes = new Uint8Array(len); 
+  const bytes = new Uint8Array(len);
   for (let i = 0; i < len; i++) {
     bytes[i] = binaryString.charCodeAt(i);
   }
@@ -193,11 +193,23 @@ export async function generateStreamResponse(
       }));
       contents.push({ role: "user", parts });
 
+      // تحسين التعليمات البرمجية لدعم لغات المدارس (Language Schools)
+      let languageContext = "";
+      if (studyLang === StudyLanguage.ENGLISH) {
+        languageContext = "You must respond and explain EXCLUSIVELY in ENGLISH as this is a Language School system. Use scientific terms in English.";
+      } else if (studyLang === StudyLanguage.FRENCH) {
+        languageContext = "Vous devez répondre et expliquer EXCLUSIVEMENT en FRANÇAIS. Utilisez des termes scientifiques en français.";
+      } else if (studyLang === StudyLanguage.GERMAN) {
+        languageContext = "Sie müssen AUSSCHLIESSLICH auf DEUTSCH antworten und erklären. Verwenden Sie wissenschaftliche Begriffe auf Deutsch.";
+      } else {
+        languageContext = "يجب أن تشرح وتجيب باللغة العربية حصراً. استخدم المصطلحات العلمية العربية الصحيحة.";
+      }
+
       let sysInstr = `أنت "دكتور مادة ${subject}" للمرحلة الثانوية المصرية 2026.
-تذكر أن اللغة الألمانية واللغة الفرنسية هما لغتان أجنبيتان ثانيتان اختياريتان، ويجب شرح القواعد والمفردات والمواقف بدقة متناهية.
+CRITICAL INSTRUCTION: ${languageContext}
 - المنهج الحالي لـ ${grade} في هذه المادة هو:
 ${curriculumStr}
-التزم بأسلوب "عصارة ليلة الامتحان" المختصر والذكاء جداً.`;
+التزم بأسلوب "عصارة ليلة الامتحان" المختصر والذكي جداً. اشرح بوضوح ودقة وفقاً للغة المختارة.`;
 
       const streamResponse = await ai.models.generateContentStream({
         model: 'gemini-3-flash-preview',
@@ -222,7 +234,9 @@ ${curriculumStr}
       attempts++;
       if (attempts >= maxAttempts) {
         if (offlineResult) { onChunk(offlineResult); return offlineResult; }
-        return "عذراً يا بطل، يبدو أن هناك ضغطاً على السيرفر. جرب مرة أخرى.";
+        return studyLang === StudyLanguage.ARABIC 
+          ? "عذراً يا بطل، يبدو أن هناك ضغطاً على السيرفر. جرب مرة أخرى." 
+          : "Sorry, the server is under high pressure. Please try again.";
       }
     }
   }
