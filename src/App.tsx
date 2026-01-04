@@ -6,7 +6,8 @@ import { ChatInterface } from './components/ChatInterface';
 import { SubscriptionModal } from './components/SubscriptionModal';
 import { AdminGenerator } from './components/AdminGenerator';
 import { TutorialModal } from './components/TutorialModal';
-import { School, LockKeyhole, Clock, AlertTriangle, HelpCircle, BadgePercent, Sparkles, Zap, Settings, ShieldCheck, Timer, Globe } from 'lucide-react';
+// Added Youtube to the lucide-react imports
+import { School, LockKeyhole, Clock, AlertTriangle, HelpCircle, BadgePercent, Sparkles, Zap, Settings, ShieldCheck, Timer, Globe, PlayCircle, Youtube } from 'lucide-react';
 import { ensureApiKey } from './utils/apiKeyManager';
 
 const App: React.FC = () => {
@@ -209,7 +210,14 @@ const App: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-3">
-                {/* Language Switcher */}
+                <button 
+                  onClick={() => setIsTutorialOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-600 rounded-xl font-bold text-xs border border-red-100 hover:bg-red-100 transition-all"
+                >
+                  <PlayCircle size={18} />
+                  <span>دليل الاستخدام</span>
+                </button>
+
                 <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1">
                    <button onClick={() => changeLanguage(StudyLanguage.ARABIC)} className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${studyLanguage === StudyLanguage.ARABIC ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>عربي</button>
                    <button onClick={() => changeLanguage(StudyLanguage.ENGLISH)} className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${studyLanguage === StudyLanguage.ENGLISH ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>EN</button>
@@ -247,6 +255,14 @@ const App: React.FC = () => {
                 <p className="text-[10px] font-black text-slate-400 tracking-[0.2em]">SMART TUTOR 2026</p>
               </div>
             </div>
+            
+            <button 
+              onClick={() => setIsTutorialOpen(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-slate-100 rounded-2xl font-black text-slate-600 hover:border-indigo-500 hover:text-indigo-600 transition-all shadow-sm group"
+            >
+              <Youtube size={20} className="text-red-600 group-hover:scale-110 transition-transform" />
+              <span>فيديو الشرح</span>
+            </button>
           </header>
 
           <main className="flex-1 w-full max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between px-6 py-8 lg:py-12 gap-12">
