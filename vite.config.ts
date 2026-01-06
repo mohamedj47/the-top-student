@@ -24,9 +24,13 @@ export default defineConfig(({ mode }) => {
       'process.env.API_KEY_10': JSON.stringify(env.API_KEY_10 || process.env.API_KEY_10 || ''),
       'process.env.API_KEY_11': JSON.stringify(env.API_KEY_11 || process.env.API_KEY_11 || ''),
       
-      // الربط مع سوبابيز - قراءة المفاتيح بأي صيغة معرفة في Vercel
+      // مطابقة الأسماء مع Vercel بالضبط
       'process.env.SUPABASE_URL': JSON.stringify(env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL || process.env.SUPABASE_URL || ''),
       'process.env.SUPABASE_ANON_KEY': JSON.stringify(env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ''),
+      
+      // أسماء إضافية للاحتياط
+      'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify(env.NEXT_PUBLIC_SUPABASE_URL || ''),
+      'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''),
     },
 
     server: {
