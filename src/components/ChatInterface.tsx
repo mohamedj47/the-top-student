@@ -6,10 +6,11 @@ import { MessageBubble } from './MessageBubble';
 import { VideoResult } from '../data/videoData';
 import { LiveVoiceModal } from './LiveVoiceModal';
 import { DynamicQuestionBank, DynamicQuestion } from '../lib/dynamicBank';
+import { isSupabaseConnected } from '../lib/supabase';
 import { 
   Send, ChevronRight, List, Bot, Loader2, BookText, 
   Trophy, HelpCircle, Target, Mic, Camera, Paperclip, X, CheckCircle, GraduationCap,
-  Sparkles, FileText, FileSearch, Heart, Youtube, Database, History, Clock, Brain
+  Sparkles, FileText, FileSearch, Heart, Youtube, Database, History, Clock, Brain, Cloud, CloudOff, Users, Zap, Globe, ShieldCheck
 } from 'lucide-react';
 
 const LessonBrowser = React.lazy(() => import('./LessonBrowser').then(module => ({ default: module.LessonBrowser })));
@@ -27,11 +28,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [libraryContent, setLibraryContent] = useState<DynamicQuestion[]>([]);
+  const [cloudStats, setCloudStats] = useState({ total: 0, students: 0 });
+  const [cloudConnected, setCloudConnected] = useState(false);
+  const [libTab, setLibTab] = useState<'local' | 'global'>('global');
 
   useEffect(() => {
+    const connected = isSupabaseConnected();
+    setCloudConnected(connected);
+    if (connected) {
+        DynamicQuestionBank.getCloudStats().then(setCloudStats);
+    }
+    
     const welcomeText = studyLanguage === StudyLanguage.ARABIC 
-      ? `أهلاً بك يا بطل في مادة **${subject}**! 🚀\nأنا دكتور المادة الخاص بك. أي معلومة سأشرحها لك سيتم حفظها تلقائياً في **"بنك الطالب"** لترجع إليها لاحقاً حتى لو انقطع الإنترنت.`
-      : `Welcome to **${subject}**! 🚀\nEverything I explain will be saved automatically to your **"Student Bank"** for offline access.`;
+      ? `أهلاً بك يا بطل في مادة **${subject}**! 🚀\nأنا دكتور المادة الخاص بك. أي معلومة سأشرحها لك سيتم حفظها تلقائياً في **"بنك الطالب"** لترجع إليها لاحقاً.`
+      : `Welcome to **${subject}**! 🚀\nEverything I explain will be saved automatically to your **"Student Bank"**.`;
 
     setMessages([{ id: '1', text: welcomeText, sender: Sender.BOT, timestamp: new Date() }]);
   }, [subject, studyLanguage]);
@@ -52,11 +62,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  const openLibrary = () => {
-    const content = DynamicQuestionBank.getAll().filter(q => q.subject === subject);
-    setLibraryContent(content);
+  const openLibrary = async () => {
+    setIsLoading(true);
+    if (libTab === 'global' && cloudConnected) {
+        const globalContent = await DynamicQuestionBank.getGlobalFeed(subject);
+        setLibraryContent(globalContent);
+    } else {
+        const content = DynamicQuestionBank.getAll().filter(q => q.subject === subject);
+        setLibraryContent(content);
+    }
+    setIsLoading(false);
     setIsLibraryOpen(true);
   };
+
+  useEffect(() => { if (isLibraryOpen) openLibrary(); }, [libTab]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -131,42 +150,68 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
         <LiveVoiceModal isOpen={isVoiceModalOpen} onClose={() => setIsVoiceModalOpen(false)} grade={grade} subject={subject} />
       </Suspense>
 
-      {/* واجهة البنك المحمل (Offline Library) */}
+      {/* واجهة البنك المتطور (Global Library) */}
       {isLibraryOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white w-full max-w-2xl h-[80vh] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden">
-                <div className="p-6 bg-indigo-600 text-white flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <Database size={24} />
-                        <div>
-                            <h3 className="font-black text-xl">بنك الطالب (أوفلاين)</h3>
-                            <p className="text-xs text-indigo-100">كل ما تعلمته مخزن هنا للرجوع إليه بدون إنترنت</p>
+        <div className="fixed inset-0 z-[100] bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white w-full max-w-2xl h-[85vh] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden">
+                <div className="p-6 bg-indigo-600 text-white flex flex-col gap-4">
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                            <Database size={28} />
+                            <div>
+                                <h3 className="font-black text-xl">بنك الطالب العالمي</h3>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs text-indigo-100">مزامنة سحابية مع 10,000 طالب 🚀</p>
+                                  {cloudConnected && <span className="w-2 h-2 bg-emerald-400 rounded-full animate-ping"></span>}
+                                </div>
+                            </div>
                         </div>
+                        <button onClick={() => setIsLibraryOpen(false)} className="p-2 hover:bg-white/10 rounded-full"><X size={24} /></button>
                     </div>
-                    <button onClick={() => setIsLibraryOpen(false)} className="p-2 hover:bg-white/10 rounded-full"><X size={24} /></button>
+                    
+                    <div className="flex bg-indigo-700/50 p-1 rounded-2xl">
+                        <button onClick={() => setLibTab('global')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${libTab === 'global' ? 'bg-white text-indigo-600 shadow-lg' : 'text-indigo-200 hover:text-white'}`}>
+                            <Zap size={14} /> رادار الأسئلة الحالية
+                        </button>
+                        <button onClick={() => setLibTab('local')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${libTab === 'local' ? 'bg-white text-indigo-600 shadow-lg' : 'text-indigo-200 hover:text-white'}`}>
+                            <History size={14} /> أرشيف أسئلتي
+                        </button>
+                    </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 relative">
+                    {isLoading && <div className="absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-10"><Loader2 className="animate-spin text-indigo-600" size={32} /></div>}
+                    
+                    {libTab === 'global' && cloudConnected && (
+                      <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-2xl mb-2 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-emerald-700 text-[10px] font-black">
+                           <ShieldCheck size={14} /> متصل بالسحابة (Supabase)
+                        </div>
+                        <div className="text-[10px] text-emerald-600 font-bold">{cloudStats.total} سؤال متاح</div>
+                      </div>
+                    )}
+
                     {libraryContent.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4">
                             <History size={64} className="opacity-20" />
-                            <p className="font-bold">لا يوجد محتوى مخزن بعد. اسأل دكتور المادة ليبدأ الحفظ!</p>
+                            <p className="font-bold">لا توجد بيانات متاحة في هذا القسم.</p>
                         </div>
                     ) : (
                         libraryContent.map((item, idx) => (
-                            <div key={idx} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:border-indigo-200 transition-all cursor-pointer" onClick={() => { setIsLibraryOpen(false); handleSend(item.question); }}>
+                            <div key={idx} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:border-indigo-200 transition-all cursor-pointer group" onClick={() => { setIsLibraryOpen(false); handleSend(item.question); }}>
                                 <div className="flex justify-between items-start mb-2">
-                                    <span className={`text-[10px] font-black px-2 py-1 rounded-lg uppercase ${
-                                        item.category === 'exam' ? 'bg-red-50 text-red-600' : 
-                                        item.category === 'summary' ? 'bg-amber-50 text-amber-600' : 'bg-indigo-50 text-indigo-600'
-                                    }`}>
-                                        {item.category === 'exam' ? 'نموذج امتحان' : item.category === 'summary' ? 'عصارة ليلة الامتحان' : 'شرح درس'}
-                                    </span>
-                                    <div className="flex items-center gap-1 text-[10px] text-slate-400 font-bold">
-                                        <Clock size={10} />
-                                        {new Date(item.timestamp).toLocaleDateString('ar-EG')}
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-[9px] font-black px-2.5 py-1 rounded-full ${
+                                            item.category === 'exam' ? 'bg-red-50 text-red-600' : 
+                                            item.category === 'summary' ? 'bg-amber-50 text-amber-600' : 'bg-indigo-50 text-indigo-600'
+                                        }`}>
+                                            {item.category === 'exam' ? 'توقع امتحان' : item.category === 'summary' ? 'ليلة الامتحان' : 'شرح درس'}
+                                        </span>
+                                        {item.timesAsked > 1 && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full flex items-center gap-1"><Users size={10}/> {item.timesAsked} طلاب</span>}
                                     </div>
+                                    <div className="text-[9px] text-slate-400 font-bold">{new Date(item.timestamp).toLocaleDateString('ar-EG')}</div>
                                 </div>
-                                <p className="font-black text-slate-800 line-clamp-2 leading-relaxed">{item.question}</p>
+                                <p className="font-black text-slate-800 leading-relaxed group-hover:text-indigo-600 transition-colors">{item.question}</p>
                             </div>
                         ))
                     )}
@@ -182,13 +227,31 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
             <h1 className="text-lg font-bold text-slate-800 truncate leading-tight flex items-center gap-1.5">
                {subject} <Heart size={14} className="text-red-500 fill-current animate-pulse" />
             </h1>
-            <p className="text-[10px] text-indigo-600 font-black">{grade} - {studyLanguage.toUpperCase()}</p>
+            <div className="flex items-center gap-2">
+                <p className="text-[10px] text-indigo-600 font-black">{grade}</p>
+                {cloudConnected ? (
+                    <span title={`سحابة مشروعك نشطة - ${cloudStats.total} سؤال`} className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 transition-all hover:bg-emerald-100 cursor-help">
+                        <div className="relative">
+                          <Cloud size={10} />
+                          <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                        </div>
+                        <span className="text-[8px] font-black">Supabase Live</span>
+                    </span>
+                ) : (
+                    <span title="وضع الأوفلاين فقط" className="flex items-center gap-1 text-slate-400 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+                        <CloudOff size={10} />
+                        <span className="text-[8px] font-black">Offline Mode</span>
+                    </span>
+                )}
+            </div>
           </div>
         </div>
         
         <div className="flex gap-2">
-            <button onClick={openLibrary} className="p-2.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100 transition-all shadow-sm" title="بنك الطالب - أوفلاين">
+            <button onClick={openLibrary} className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 transition-all shadow-sm relative group" title="بنك المتفوقين">
                 <Database size={22} />
+                {cloudConnected && <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full animate-ping"></span>}
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-indigo-600 border-2 border-white rounded-full"></span>
             </button>
             <button onClick={() => setIsLessonBrowserOpen(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-md shadow-indigo-100 active:scale-95 transition-all">
                 <List size={18} />
@@ -244,12 +307,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
             label={studyLanguage === StudyLanguage.ARABIC ? "امتحان متوقع + الإجابات" : "Mock Exam + Answers"} 
             color="text-red-600 border-red-100 bg-red-50/30" 
             prompt={studyLanguage === StudyLanguage.ARABIC ? `ولد لي نموذج امتحان ليلة الامتحان في مادة ${subject} (15 سؤال MCQ) مع شرح الإجابات في النهاية.` : `Generate a Final Mock Exam for ${subject} with 15 MCQ questions and detailed answers.`} 
-          />
-          <QuickTool 
-            icon={Database} 
-            label={studyLanguage === StudyLanguage.ARABIC ? "بنكي المحمل" : "My Stored Bank"} 
-            color="text-emerald-600 border-emerald-100 bg-emerald-50/20" 
-            onClick={openLibrary}
           />
         </div>
 
