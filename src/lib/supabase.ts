@@ -1,44 +1,66 @@
-
-// @ts-ignore - استيراد مباشر من الـ CDN لضمان التوافق مع المتصفح
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+// استيراد مباشر من CDN لضمان التوافق مع المتصفح (Vite)
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
 /**
- * محرك الربط مع سوبابيز المطور
- * يدعم التنسيقات التقليدية والحديثة لمفاتيح Supabase
+ * محرك الربط مع Supabase
+ * نسخة Vite / Browser صحيحة 100%
  */
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+// قراءة المتغيرات من Vite فقط
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-export const supabase = (supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http')) 
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      realtime: { params: { eventsPerSecond: 10 } },
-      auth: { persistSession: true, autoRefreshToken: true }
-    }) 
-  : null;
+/**
+ * التحقق المبدئي من القيم
+ */
+const isUrlValid =
+  typeof supabaseUrl === 'string' &&
+  supabaseUrl.startsWith('http') &&
+  supabaseUrl.includes('.supabase.co');
+
+const isKeyValid =
+  typeof supabaseAnonKey === 'string' &&
+  (
+    supabaseAnonKey.trim().startsWith('eyJ') || // JWT القديم
+    supabaseAnonKey.trim().startsWith('sb_')    // Publishable الجديد
+  );
+
+/**
+ * إنشاء عميل Supabase
+ * ⚠️ لا نُنشئ client بقيم فارغة أبدًا
+ */
+export const supabase: SupabaseClient | null =
+  isUrlValid && isKeyValid
+    ? createClient(supabaseUrl!, supabaseAnonKey!, {
+        realtime: {
+          params: { eventsPerSecond: 10 }
+        },
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true
+        }
+      })
+    : null;
 
 /**
  * فحص الاتصال الحقيقي
- * تم التحديث ليدعم مفاتيح (eyJ) و (sb_publishable)
  */
 export const isSupabaseConnected = (): boolean => {
-  const urlValid = !!supabaseUrl && (supabaseUrl.includes('.supabase.co') || supabaseUrl.includes('localhost'));
-  // يقبل التنسيق القديم eyJ أو التنسيق الجديد sb_
-  const keyValid = !!supabaseAnonKey && (supabaseAnonKey.startsWith('eyJ') || supabaseAnonKey.startsWith('sb_'));
-  return urlValid && keyValid;
+  return isUrlValid && isKeyValid;
 };
 
+/**
+ * تقرير حالة مفصل (لـ UI أو Debug)
+ */
 export const getSupabaseStatus = () => {
-    return {
-        // فحص وجود الرابط
-        hasUrl: !!supabaseUrl && supabaseUrl.length > 10,
-        // فحص وجود المفتاح
-        hasKey: !!supabaseAnonKey && supabaseAnonKey.length > 20,
-        // فحص التنسيق - يدعم كلا النوعين الآن
-        isKeyFormatCorrect: !!supabaseAnonKey && (supabaseAnonKey.trim().startsWith('eyJ') || supabaseAnonKey.trim().startsWith('sb_')),
-        // فحص ما إذا كان المستخدم وضع مفتاح Stripe بالخطأ (مفاتيح Stripe تبدأ بـ sk_ أو pk_)
-        isStripeKeyDetected: !!supabaseAnonKey && (supabaseAnonKey.startsWith('sk_') || supabaseAnonKey.startsWith('pk_')),
-        // الحالة النهائية
-        isConnected: isSupabaseConnected()
-    };
+  return {
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseAnonKey,
+    isUrlValid,
+    isKeyFormatCorrect: isKeyValid,
+    isStripeKeyDetected:
+      !!supabaseAnonKey &&
+      (supabaseAnonKey.startsWith('sk_') || supabaseAnonKey.startsWith('pk_')),
+    isConnected: isSupabaseConnected()
+  };
 };
