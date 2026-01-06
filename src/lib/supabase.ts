@@ -3,8 +3,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
 /**
- * محرك الربط مع سوبابيز
- * يتم حقن هذه القيم أثناء عملية الـ Build بواسطة vite.config.ts
+ * محرك الربط مع سوبابيز المطور
+ * يدعم التنسيقات التقليدية والحديثة لمفاتيح Supabase
  */
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -19,10 +19,12 @@ export const supabase = (supabaseUrl && supabaseAnonKey && supabaseUrl.startsWit
 
 /**
  * فحص الاتصال الحقيقي
+ * تم التحديث ليدعم مفاتيح (eyJ) و (sb_publishable)
  */
 export const isSupabaseConnected = (): boolean => {
-  const urlValid = !!supabaseUrl && supabaseUrl.includes('.supabase.co');
-  const keyValid = !!supabaseAnonKey && supabaseAnonKey.startsWith('eyJ');
+  const urlValid = !!supabaseUrl && (supabaseUrl.includes('.supabase.co') || supabaseUrl.includes('localhost'));
+  // يقبل التنسيق القديم eyJ أو التنسيق الجديد sb_
+  const keyValid = !!supabaseAnonKey && (supabaseAnonKey.startsWith('eyJ') || supabaseAnonKey.startsWith('sb_'));
   return urlValid && keyValid;
 };
 
@@ -31,11 +33,11 @@ export const getSupabaseStatus = () => {
         // فحص وجود الرابط
         hasUrl: !!supabaseUrl && supabaseUrl.length > 10,
         // فحص وجود المفتاح
-        hasKey: !!supabaseAnonKey && supabaseAnonKey.length > 50,
-        // فحص التنسيق
-        isKeyFormatCorrect: !!supabaseAnonKey && supabaseAnonKey.trim().startsWith('eyJ'),
-        // فحص ما إذا كان المستخدم وضع مفتاح Stripe بالخطأ
-        isStripeKeyDetected: !!supabaseAnonKey && supabaseAnonKey.startsWith('sb_'),
+        hasKey: !!supabaseAnonKey && supabaseAnonKey.length > 20,
+        // فحص التنسيق - يدعم كلا النوعين الآن
+        isKeyFormatCorrect: !!supabaseAnonKey && (supabaseAnonKey.trim().startsWith('eyJ') || supabaseAnonKey.trim().startsWith('sb_')),
+        // فحص ما إذا كان المستخدم وضع مفتاح Stripe بالخطأ (مفاتيح Stripe تبدأ بـ sk_ أو pk_)
+        isStripeKeyDetected: !!supabaseAnonKey && (supabaseAnonKey.startsWith('sk_') || supabaseAnonKey.startsWith('pk_')),
         // الحالة النهائية
         isConnected: isSupabaseConnected()
     };
