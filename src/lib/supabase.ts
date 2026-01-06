@@ -3,10 +3,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
 /**
- * محرك الربط مع سوبابيز - إصدار الإنتاج المعتمد
+ * محرك الربط مع سوبابيز
  */
 
-// محاولة جلب القيم بأكثر من مسمى لضمان النجاح في Vercel
+// جلب القيم المحقونة من Vite
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
 
@@ -18,27 +18,23 @@ export const supabase = (supabaseUrl && supabaseAnonKey && supabaseUrl.startsWit
   : null;
 
 /**
- * يتحقق مما إذا كان التطبيق متصلاً فعلياً بقاعدة البيانات السحابية
+ * فحص الاتصال الحقيقي
  */
 export const isSupabaseConnected = (): boolean => {
-  // التحقق من أن القيم موجودة وتتبع تنسيق سوبابيز الصحيح
-  const hasValidUrl = !!supabaseUrl && supabaseUrl.includes('.supabase.co');
-  const hasValidKey = !!supabaseAnonKey && supabaseAnonKey.startsWith('eyJ');
-  
-  return hasValidUrl && hasValidKey;
+  return !!(supabaseUrl && supabaseUrl.includes('.supabase.co') && supabaseAnonKey && supabaseAnonKey.startsWith('eyJ'));
 };
 
 export const getSupabaseStatus = () => {
     return {
-        // نستخدم القيم الفعلية التي تمت قراءتها للفحص
+        // فحص وجود الرابط
         hasUrl: !!supabaseUrl && supabaseUrl.length > 10,
+        // فحص وجود المفتاح وطوله (مفاتيح سوبابيز دائماً طويلة جداً)
         hasKey: !!supabaseAnonKey && supabaseAnonKey.length > 50,
+        // فحص التنسيق (يجب أن يبدأ بـ eyJ)
         isKeyFormatCorrect: !!supabaseAnonKey && supabaseAnonKey.startsWith('eyJ'),
+        // فحص ما إذا كان المستخدم وضع مفتاح Stripe بالخطأ
         isStripeKeyDetected: !!supabaseAnonKey && supabaseAnonKey.startsWith('sb_'),
-        isConnected: isSupabaseConnected(),
-        debugInfo: {
-            urlPrefix: supabaseUrl ? supabaseUrl.substring(0, 10) : 'none',
-            keyPrefix: supabaseAnonKey ? supabaseAnonKey.substring(0, 5) : 'none'
-        }
+        // الحالة النهائية
+        isConnected: isSupabaseConnected()
     };
 };
