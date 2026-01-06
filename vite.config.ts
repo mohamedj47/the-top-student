@@ -3,12 +3,15 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
-  // تحميل المتغيرات من البيئة (Vercel يضعها في process.env أثناء البناء)
+  // تحميل المتغيرات من كافة المصادر المتاحة
   const env = loadEnv(mode, process.cwd(), '');
 
-  // استخراج القيم مع تنظيفها من أي مسافات زائدة
-  const supabaseUrl = (env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
-  const supabaseKey = (env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
+  // استخراج القيم مع تنظيفها لضمان عدم وجود أخطاء في النسخ واللصق
+  const rawUrl = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL || "";
+  const rawKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || "";
+  
+  const supabaseUrl = rawUrl.trim();
+  const supabaseKey = rawKey.trim();
 
   return {
     plugins: [react()],
@@ -28,7 +31,7 @@ export default defineConfig(({ mode }) => {
       'process.env.API_KEY_10': JSON.stringify(env.API_KEY_10 || ''),
       'process.env.API_KEY_11': JSON.stringify(env.API_KEY_11 || ''),
       
-      // حقن مفاتيح سوبابيز بشكل صارم
+      // حقن مفاتيح سوبابيز بأسماء متعددة لضمان الوصول إليها
       'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify(supabaseUrl),
       'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(supabaseKey),
       'process.env.SUPABASE_URL': JSON.stringify(supabaseUrl),
