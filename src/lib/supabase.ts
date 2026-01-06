@@ -1,5 +1,6 @@
 
-import { createClient } from '@supabase/supabase-js';
+// @ts-ignore - استيراد مباشر من الـ CDN لتجاوز مشاكل بناء الحزم في Vercel
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
 // محاولة جلب المفاتيح بكافة الصيغ الممكنة
 const supabaseUrl = process.env.SUPABASE_URL || (window as any)._env_?.SUPABASE_URL || "";
@@ -25,5 +26,5 @@ export const supabase = (supabaseUrl && supabaseAnonKey && supabaseUrl !== "unde
 export const isSupabaseConnected = (): boolean => {
   if (!supabase) return false;
   // فحص إضافي للتأكد من أن الرابط ليس فارغاً
-  return supabaseUrl.length > 10;
+  return (supabaseUrl && supabaseUrl.length > 10) ? true : false;
 };
