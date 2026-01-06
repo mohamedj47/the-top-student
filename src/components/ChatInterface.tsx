@@ -6,11 +6,11 @@ import { MessageBubble } from './MessageBubble';
 import { VideoResult } from '../data/videoData';
 import { LiveVoiceModal } from './LiveVoiceModal';
 import { DynamicQuestionBank, DynamicQuestion } from '../lib/dynamicBank';
-import { isSupabaseConnected } from '../lib/supabase';
+import { isSupabaseConnected, getSupabaseStatus } from '../lib/supabase';
 import { 
   Send, ChevronRight, List, Bot, Loader2, BookText, 
   Trophy, HelpCircle, Target, Mic, Camera, Paperclip, X, CheckCircle, GraduationCap,
-  Sparkles, FileText, FileSearch, Heart, Youtube, Database, History, Clock, Brain, Cloud, CloudOff, Users, Zap, Globe, ShieldCheck
+  Sparkles, FileText, FileSearch, Heart, Youtube, Database, History, Clock, Brain, Cloud, CloudOff, Users, Zap, Globe, ShieldCheck, AlertCircle
 } from 'lucide-react';
 
 const LessonBrowser = React.lazy(() => import('./LessonBrowser').then(module => ({ default: module.LessonBrowser })));
@@ -31,6 +31,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
   const [cloudStats, setCloudStats] = useState({ total: 0, students: 0 });
   const [cloudConnected, setCloudConnected] = useState(false);
   const [libTab, setLibTab] = useState<'local' | 'global'>('global');
+  const [showStatusHint, setShowStatusHint] = useState(false);
 
   useEffect(() => {
     const connected = isSupabaseConnected();
@@ -153,7 +154,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
       {/* واجهة البنك المتطور (Global Library) */}
       {isLibraryOpen && (
         <div className="fixed inset-0 z-[100] bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white w-full max-w-2xl h-[85vh] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden">
+            <div className="bg-white w-full max-w-2xl h-[85vh] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden border border-white/20">
                 <div className="p-6 bg-indigo-600 text-white flex flex-col gap-4">
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-3">
@@ -183,7 +184,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
                     {isLoading && <div className="absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-10"><Loader2 className="animate-spin text-indigo-600" size={32} /></div>}
                     
                     {libTab === 'global' && cloudConnected && (
-                      <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-2xl mb-2 flex items-center justify-between">
+                      <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-2xl mb-2 flex items-center justify-between shadow-sm">
                         <div className="flex items-center gap-2 text-emerald-700 text-[10px] font-black">
                            <ShieldCheck size={14} /> متصل بالسحابة (Supabase)
                         </div>
@@ -222,26 +223,65 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
 
       <header className="bg-white border-b border-slate-200 px-3 py-3 flex justify-between items-center shadow-sm sticky top-0 z-20">
         <div className={`flex items-center gap-2 flex-1 ${studyLanguage === StudyLanguage.ARABIC ? 'flex-row' : 'flex-row-reverse'}`}>
-          <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-full"><ChevronRight size={24} className={studyLanguage === StudyLanguage.ARABIC ? '' : 'rotate-180'} /></button>
+          <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><ChevronRight size={24} className={studyLanguage === StudyLanguage.ARABIC ? '' : 'rotate-180'} /></button>
           <div className={studyLanguage === StudyLanguage.ARABIC ? 'text-right' : 'text-left'}>
             <h1 className="text-lg font-bold text-slate-800 truncate leading-tight flex items-center gap-1.5">
                {subject} <Heart size={14} className="text-red-500 fill-current animate-pulse" />
             </h1>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 relative">
                 <p className="text-[10px] text-indigo-600 font-black">{grade}</p>
+                
+                {/* مؤشر الحالة السحابية المتطور */}
                 {cloudConnected ? (
-                    <span title={`سحابة مشروعك نشطة - ${cloudStats.total} سؤال`} className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 transition-all hover:bg-emerald-100 cursor-help">
+                    <span title="مشروعك متصل بسحابة Supabase بنجاح" className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100 shadow-sm transition-all hover:bg-emerald-100 cursor-pointer">
                         <div className="relative">
-                          <Cloud size={10} />
-                          <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                          <Cloud size={11} className="fill-current opacity-20" />
+                          <Cloud size={11} className="absolute inset-0" />
+                          <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></div>
                         </div>
-                        <span className="text-[8px] font-black">Supabase Live</span>
+                        <span className="text-[9px] font-black tracking-tight">Supabase Live</span>
                     </span>
                 ) : (
-                    <span title="وضع الأوفلاين فقط" className="flex items-center gap-1 text-slate-400 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
-                        <CloudOff size={10} />
-                        <span className="text-[8px] font-black">Offline Mode</span>
-                    </span>
+                    <div className="relative group">
+                        <span 
+                            onClick={() => setShowStatusHint(!showStatusHint)}
+                            className="flex items-center gap-1.5 text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full border border-slate-100 cursor-help hover:bg-red-50 hover:text-red-500 transition-all shadow-sm"
+                        >
+                            <CloudOff size={11} />
+                            <span className="text-[9px] font-black">Offline Mode</span>
+                        </span>
+                        
+                        {showStatusHint && (
+                            <div className="absolute top-full right-0 mt-2 w-64 bg-white border border-slate-200 shadow-2xl rounded-[1.5rem] p-5 z-50 animate-in fade-in slide-in-from-top-1 text-right border-t-4 border-t-red-500">
+                                <div className="flex items-center gap-2 text-red-600 mb-3 border-b border-slate-100 pb-2">
+                                    <AlertCircle size={16} />
+                                    <span className="text-[11px] font-black">فحص اتصال السحابة</span>
+                                </div>
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between text-[10px] font-bold">
+                                        <span className={getSupabaseStatus().hasUrl ? "text-emerald-600" : "text-red-500"}>
+                                            {getSupabaseStatus().hasUrl ? "رابط صحيح ✅" : "مفقود ❌"}
+                                        </span>
+                                        <span className="text-slate-500">Supabase URL</span>
+                                    </div>
+                                    <div className="flex flex-col gap-2 border-t border-slate-50 pt-2">
+                                        <div className="flex items-center justify-between text-[10px] font-bold">
+                                          <span className={getSupabaseStatus().isKeyFormatCorrect ? "text-emerald-600" : "text-red-500"}>
+                                              {getSupabaseStatus().isKeyFormatCorrect ? "تنسيق صحيح (eyJ) ✅" : "تنسيق خاطئ ❌"}
+                                          </span>
+                                          <span className="text-slate-500">تنسيق المفتاح</span>
+                                        </div>
+                                        {getSupabaseStatus().isStripeKeyDetected && (
+                                          <div className="bg-red-50 text-red-700 p-3 rounded-xl text-[9px] font-black leading-relaxed mt-1 border border-red-100">
+                                            ⚠️ خطأ شائع: لقد استخدمت مفتاح Stripe (يبدأ بـ sb_). سوبابيز يتطلب المفتاح الذي يبدأ بـ (eyJ).
+                                          </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <button onClick={() => window.location.reload()} className="mt-4 w-full py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black">إعادة تحديث الصفحة</button>
+                            </div>
+                        )}
+                    </div>
                 )}
             </div>
           </div>
@@ -250,7 +290,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
         <div className="flex gap-2">
             <button onClick={openLibrary} className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 transition-all shadow-sm relative group" title="بنك المتفوقين">
                 <Database size={22} />
-                {cloudConnected && <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full animate-ping"></span>}
+                {cloudConnected && <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full animate-pulse"></span>}
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-indigo-600 border-2 border-white rounded-full"></span>
             </button>
             <button onClick={() => setIsLessonBrowserOpen(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-md shadow-indigo-100 active:scale-95 transition-all">
