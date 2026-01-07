@@ -7,9 +7,9 @@ interface KeyStatus {
 }
 
 const KEYS_POOL: string[] = [
-  process.env.API_KEY,  
+  process.env.API_KEY,
   process.env.API_KEY_1,
-  process.env.API_KEY_2, 
+  process.env.API_KEY_2,
   process.env.API_KEY_3,
   process.env.API_KEY_4,
   process.env.API_KEY_5,
@@ -28,9 +28,9 @@ const keyRegistry: KeyStatus[] = KEYS_POOL.map((key, index) => ({
   isCoolingDown: false
 }));
 
-const COOLDOWN_PERIOD = 90 * 1000;
+const COOLDOWN_PERIOD = 60 * 1000; // 60 seconds cooldown for failed keys
 
-export function getApiKey(excludeKey?: string): string {
+export function getApiKey(): string {
   if (keyRegistry.length === 0) return process.env.API_KEY || '';
   
   const now = Date.now();
@@ -40,28 +40,14 @@ export function getApiKey(excludeKey?: string): string {
     }
   });
 
-  let availableKeys = keyRegistry.filter(item => !item.isCoolingDown && item.key !== excludeKey);
+  const available = keyRegistry.filter(item => !item.isCoolingDown);
   
-  if (availableKeys.length === 0 && excludeKey) {
-    availableKeys = keyRegistry.filter(item => item.key !== excludeKey);
-  }
-
-  if (availableKeys.length > 0) {
-    const randomIndex = Math.floor(Math.random() * availableKeys.length);
-    return availableKeys[randomIndex].key;
-  }
-
-  return keyRegistry[0]?.key || process.env.API_KEY || '';
-}
-
-export function getAvailableKeys(): string[] {
-  const now = Date.now();
-  keyRegistry.forEach(item => {
-    if (item.isCoolingDown && (now - item.failedAt > COOLDOWN_PERIOD)) {
-      item.isCoolingDown = false;
-    }
-  });
-  return keyRegistry.filter(item => !item.isCoolingDown).map(item => item.key);
+  // توزيع الحمل بناءً على البصمة الزمنية لضمان عدم الضغط على مفتاح واحد
+  if (available.length === 0) return keyRegistry[0].key;
+  
+  const deviceId = localStorage.getItem('device_id') || 'guest';
+  const hash = deviceId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return available[hash % available.length].key;
 }
 
 export function markKeyAsFailed(failedKey: string): void {
@@ -69,7 +55,7 @@ export function markKeyAsFailed(failedKey: string): void {
   if (item) {
     item.failedAt = Date.now();
     item.isCoolingDown = true;
-    console.warn(`[Quota Shield] Key ${item.id} entered cooldown state.`);
+    console.warn(`[Shield] Key ${item.id} moved to cooldown.`);
   }
 }
 
