@@ -4,7 +4,7 @@ export enum GradeLevel {
   GRADE_11 = 'الصف الثاني الثانوي',
   GRADE_12 = 'الصف الثالث الثانوي',
 }
-
+ 
 export enum Subject {
   ARABIC = 'اللغة العربية',
   ENGLISH = 'اللغة الإنجليزية',
