@@ -262,7 +262,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         onExplain={handleExplainLesson}
         onPlayVideo={(lesson, data) => setSelectedVideo({ lesson, data })}
       />
-
+ 
       <YouTubeModal 
         isOpen={!!selectedVideo}
         onClose={() => setSelectedVideo(null)}
