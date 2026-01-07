@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { GradeLevel, Subject, StudyLanguage } from './types';
 import { SubjectGrid } from './components/SubjectGrid';
-import { ChatInterface } from './components/ChatInterface';
+import { ChatInterface } from './components/ChatInterface'; 
 import { SubscriptionModal } from './components/SubscriptionModal';
 import { AdminGenerator } from './components/AdminGenerator';
 import { TutorialModal } from './components/TutorialModal';
