@@ -1,88 +1,41 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Printer, Volume2, VolumeX, Loader2 } from 'lucide-react';
-import { streamSpeech, generateAiSpeech } from '../services/geminiService';
+import { streamSpeech } from '../services/geminiService';
 
 export const FloatingTools: React.FC = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourcesRef = useRef<AudioBufferSourceNode[]>([]);
-  const nextStartTimeRef = useRef<number>(0);
   const isSpeakingRef = useRef(false);
 
   useEffect(() => {
     return () => {
       stopAudio();
-      if (audioContextRef.current) audioContextRef.current.close();
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
     };
   }, []);
 
   const stopAudio = () => {
     isSpeakingRef.current = false;
+
     sourcesRef.current.forEach(source => {
-      try { source.stop(); } catch (e) {}
+      try {
+        source.stop();
+      } catch {}
     });
+
     sourcesRef.current = [];
     setIsSpeaking(false);
     setIsLoading(false);
-    nextStartTimeRef.current = 0;
   };
 
   const handlePrint = () => {
     window.scrollTo(0, 0);
     window.print();
-  };
-
-  const playAudioData = async (base64: string, source: 'gemini' | 'elevenlabs') => {
-    const ctx = audioContextRef.current;
-    if (!ctx) return;
-
-    try {
-      const binaryString = atob(base64);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-
-      let buffer: AudioBuffer;
-
-      if (source === 'elevenlabs') {
-        // ElevenLabs يعطي ملف MP3 مضغوط، نحتاج لفك ضغطه
-        buffer = await ctx.decodeAudioData(bytes.buffer);
-      } else {
-        // Gemini يعطي بيانات PCM خام Int16
-        const int16 = new Int16Array(bytes.buffer);
-        const float32 = new Float32Array(int16.length);
-        for (let i = 0; i < int16.length; i++) {
-          float32[i] = int16[i] / 32768.0;
-        }
-        buffer = ctx.createBuffer(1, float32.length, 24000);
-        buffer.getChannelData(0).set(float32);
-      }
-
-      const sourceNode = ctx.createBufferSource();
-      sourceNode.buffer = buffer;
-      sourceNode.connect(ctx.destination);
-      
-      const startTime = Math.max(ctx.currentTime, nextStartTimeRef.current);
-      sourceNode.start(startTime);
-      nextStartTimeRef.current = startTime + buffer.duration;
-      sourcesRef.current.push(sourceNode);
-
-      sourceNode.onended = () => {
-        const index = sourcesRef.current.indexOf(sourceNode);
-        if (index > -1) sourcesRef.current.splice(index, 1);
-        if (sourcesRef.current.length === 0 && ctx.currentTime >= nextStartTimeRef.current - 0.1) {
-          setIsSpeaking(false);
-          isSpeakingRef.current = false;
-        }
-      };
-    } catch (e) {
-      console.error("Audio playback error", e);
-      stopAudio();
-    }
   };
 
   const handleReadPage = async () => {
@@ -91,16 +44,17 @@ export const FloatingTools: React.FC = () => {
       return;
     }
 
-    let textToRead = "";
+    let textToRead = '';
+
     const contentElements = document.querySelectorAll('.markdown-body');
     if (contentElements.length > 0) {
       contentElements.forEach(el => {
-        textToRead += (el as HTMLElement).innerText + " . ";
+        textToRead += (el as HTMLElement).innerText + ' . ';
       });
     } else {
-      const mainHeaders = document.querySelectorAll('h1, h2, h3');
-      mainHeaders.forEach(h => {
-        textToRead += (h as HTMLElement).innerText + " . ";
+      const headers = document.querySelectorAll('h1, h2, h3, p');
+      headers.forEach(el => {
+        textToRead += (el as HTMLElement).innerText + ' . ';
       });
     }
 
@@ -111,28 +65,25 @@ export const FloatingTools: React.FC = () => {
     isSpeakingRef.current = true;
 
     try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioContextClass =
+        window.AudioContext || (window as any).webkitAudioContext;
+
       if (!audioContextRef.current) {
         audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
       }
+
       if (audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
       }
-      nextStartTimeRef.current = audioContextRef.current.currentTime;
 
-      const audioResult = await generateAiSpeech(textToRead);
       setIsLoading(false);
 
-      if (audioResult) {
-        await playAudioData(audioResult.data, audioResult.source);
-      } else {
-        await streamSpeech(textToRead, () => {
-          setIsSpeaking(false);
-          isSpeakingRef.current = false;
-        });
-      }
-    } catch (e) {
-      console.error("Global Read error", e);
+      await streamSpeech(textToRead, () => {
+        setIsSpeaking(false);
+        isSpeakingRef.current = false;
+      });
+    } catch (error) {
+      console.error('Read page error:', error);
       stopAudio();
     }
   };
@@ -147,11 +98,11 @@ export const FloatingTools: React.FC = () => {
         onClick={handleReadPage}
         disabled={isLoading}
         className={`p-3 rounded-full shadow-lg transition-all border-2 border-white hover:scale-105 flex items-center justify-center ${
-          isSpeaking 
-          ? 'bg-red-500 text-white animate-pulse' 
-          : 'bg-indigo-600 text-white hover:bg-indigo-700'
+          isSpeaking
+            ? 'bg-red-500 text-white animate-pulse'
+            : 'bg-indigo-600 text-white hover:bg-indigo-700'
         }`}
-        title={isSpeaking ? "إيقاف القراءة" : "قراءة الصفحة بالكامل"}
+        title={isSpeaking ? 'إيقاف القراءة' : 'قراءة الصفحة بالكامل'}
       >
         {isLoading ? (
           <Loader2 size={20} className="animate-spin" />
