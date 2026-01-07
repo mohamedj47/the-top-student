@@ -7,8 +7,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   // استخراج القيم مع تنظيفها لضمان عدم وجود أخطاء في النسخ واللصق
-  const rawUrl = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL || "";
-  const rawKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || "";
+  const rawUrl = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL || env.VITE_SUPABASE_URL || "";
+  const rawKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || "";
   
   const supabaseUrl = rawUrl.trim();
   const supabaseKey = rawKey.trim();
@@ -31,11 +31,13 @@ export default defineConfig(({ mode }) => {
       'process.env.API_KEY_10': JSON.stringify(env.API_KEY_10 || ''),
       'process.env.API_KEY_11': JSON.stringify(env.API_KEY_11 || ''),
       
-      // حقن مفاتيح سوبابيز بأسماء متعددة لضمان الوصول إليها
+      // حقن مفاتيح سوبابيز بأسماء متعددة لضمان الوصول إليها في كافة البيئات
       'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify(supabaseUrl),
       'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(supabaseKey),
       'process.env.SUPABASE_URL': JSON.stringify(supabaseUrl),
       'process.env.SUPABASE_ANON_KEY': JSON.stringify(supabaseKey),
+      'process.env.VITE_SUPABASE_URL': JSON.stringify(supabaseUrl),
+      'process.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(supabaseKey),
     },
 
     server: {
