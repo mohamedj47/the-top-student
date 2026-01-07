@@ -11,7 +11,7 @@ const PRECACHE_ASSETS = [
   "/types.ts",
   "/main.tsx",
   "https://cdn.tailwindcss.com",
-  "https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap",
+  "https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap", 
   "https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"
 ];
 
