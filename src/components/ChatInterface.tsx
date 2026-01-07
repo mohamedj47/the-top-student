@@ -153,6 +153,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
         </div>
       </main>
 
+      {/* Modals are correctly imported via PascalCase */}
       <LessonBrowser isOpen={isLessonBrowserOpen} onClose={() => setIsLessonBrowserOpen(false)} grade={grade} subject={subject} onExplain={(l) => { setIsLessonBrowserOpen(false); handleSend(`اشرح لي درس ${l} بالتفصيل.`); }} onPlayVideo={() => {}} />
       <KnowledgeNotebook isOpen={isNotebookOpen} onClose={() => setIsNotebookOpen(false)} subject={subject} onUseSource={(t) => handleSend(t)} />
       <FinalMemoModal isOpen={isFinalMemoOpen} onClose={() => setIsFinalMemoOpen(false)} subject={subject} grade={grade} />
