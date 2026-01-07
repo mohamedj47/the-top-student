@@ -1,9 +1,5 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-/**
- * محرك الربط مع Supabase
- * مصمم للعمل في بيئة Vercel و Vite مع دعم المتغيرات NEXT_PUBLIC_
- */
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const getEnv = (key: string): string => {
   // @ts-ignore
@@ -20,23 +16,23 @@ const getEnv = (key: string): string => {
 const supabaseUrl = getEnv('NEXT_PUBLIC_SUPABASE_URL') || getEnv('SUPABASE_URL');
 const supabaseAnonKey = getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY') || getEnv('SUPABASE_ANON_KEY');
 
-const isUrlValid = typeof supabaseUrl === 'string' && supabaseUrl.startsWith('https://');
-const isKeyValid = typeof supabaseAnonKey === 'string' && supabaseAnonKey.length > 20;
-
-export const supabase: SupabaseClient | null = (isUrlValid && isKeyValid)
+export const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
 export const isSupabaseConnected = (): boolean => !!supabase;
 
-export const getSupabaseStatus = () => {
-  return {
-    hasUrl: !!supabaseUrl,
-    hasKey: !!supabaseAnonKey,
-    isUrlValid,
-    isKeyFormatCorrect: isKeyValid,
-    isConnected: isSupabaseConnected(),
-    urlPrefix: supabaseUrl ? supabaseUrl.substring(0, 15) : "Missing",
-    keyPrefix: supabaseAnonKey ? supabaseAnonKey.substring(0, 8) : "Missing"
-  };
+/**
+ * وظائف تخزين البيانات السحابية للطالب
+ */
+export const CloudStorage = {
+  async saveMessage(studentId: string, message: any) {
+    if (!supabase) return;
+    await supabase.from('messages').insert([{ student_id: studentId, ...message }]);
+  },
+  async getStudentProgress(studentId: string) {
+    if (!supabase) return null;
+    const { data } = await supabase.from('progress').select('*').eq('student_id', studentId).single();
+    return data;
+  }
 };
