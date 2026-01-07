@@ -128,5 +128,3 @@ export const FinalMemoModal: React.FC<FinalMemoModalProps> = ({ isOpen, onClose,
     </div>
   );
 };
-
-export default FinalMemoModal;
