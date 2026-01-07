@@ -4,97 +4,60 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>الطالب المتفوق - المعلم الذكي</title>
-    
-    <!-- PWA Settings -->
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#4f46e5" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3413/3413535.png" />
- 
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>المعلم الذكي - رحلة التفوق</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      :root { --font-main: 'Cairo', sans-serif; }
+      :root { 
+        --font-main: 'Almarai', sans-serif;
+        --font-header: 'Cairo', sans-serif;
+      }
       body {
         font-family: var(--font-main);
         background-color: #f8fafc;
-        margin: 0;
-        overflow-x: hidden;
-      }
-      /* تحسين جمالية شاشة التحميل */
-      #initial-loader {
-        height: 100vh;
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        background: radial-gradient(circle at center, #ffffff 0%, #f1f5f9 100%);
-      }
-      .loader-logo {
-        width: 80px;
-        height: 80px;
-        background: #4f46e5;
-        border-radius: 24px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        color: white;
-        margin-bottom: 24px;
-        box-shadow: 0 20px 25px -5px rgba(79, 70, 229, 0.2);
-        animation: pulse 2s infinite;
-      }
-      @keyframes pulse {
-        0% { transform: scale(1); box-shadow: 0 20px 25px -5px rgba(79, 70, 229, 0.2); }
-        50% { transform: scale(1.05); box-shadow: 0 25px 30px -5px rgba(79, 70, 229, 0.4); }
-        100% { transform: scale(1); box-shadow: 0 20px 25px -5px rgba(79, 70, 229, 0.2); }
-      }
-      .progress-bar {
-        width: 200px;
-        height: 6px;
-        background: #e2e8f0;
-        border-radius: 10px;
-        overflow: hidden;
-        margin-top: 10px;
-      }
-      .progress-fill {
-        height: 100%;
-        background: #4f46e5;
-        width: 30%;
-        animation: progress 2s infinite ease-in-out;
-        border-radius: 10px;
-      }
-      @keyframes progress {
-        0% { width: 0%; transform: translateX(-100%); }
-        50% { width: 70%; transform: translateX(50%); }
-        100% { width: 0%; transform: translateX(200%); }
-      }
-      .loader-text {
-        font-weight: 800;
         color: #1e293b;
-        font-size: 1.25rem;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
       }
-      .loader-subtext {
-        color: #64748b;
-        font-size: 0.875rem;
-        margin-top: 4px;
-        font-weight: 600;
+      h1, h2, h3, .font-header { font-family: var(--font-header); }
+      
+      .prose {
+        line-height: 2 !important;
+        font-size: 1.2rem !important;
+        font-weight: 700;
+      }
+      
+      .interactive-prose p, .interactive-prose li {
+        padding: 4px 8px;
+        transition: all 0.2s;
+        border-radius: 8px;
+      }
+      .interactive-prose p:hover, .interactive-prose li:hover {
+        background-color: rgba(79, 70, 229, 0.08);
+        cursor: pointer;
+        transform: translateX(-5px);
+      }
+      
+      ::-webkit-scrollbar { width: 0px; background: transparent; }
+      
+      @media print {
+        .no-print { display: none !important; }
+        body { background: white; }
       }
     </style>
   <script type="importmap">
 {
   "imports": {
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.90.0",
     "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
-    "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
-    "vite": "https://esm.sh/vite@^7.3.0",
     "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
+    "vite": "https://esm.sh/vite@^7.3.1",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
     "remark-gfm": "https://esm.sh/remark-gfm@^4.0.1",
     "@vercel/node": "https://esm.sh/@vercel/node@^5.5.16"
@@ -103,21 +66,7 @@
 </script>
 </head>
   <body>
-    <div id="root">
-      <div id="initial-loader">
-        <div class="loader-logo">
-            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 8-4 8 4-8 4-8-4z"/><path d="M4 10.7V17a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6.3"/><path d="m8 22 4-4 4 4"/></svg>
-        </div>
-        <div class="loader-text">المعلم الذكي</div>
-        <div class="loader-subtext">جاري تجهيز بيئة التفوق...</div>
-        <div class="progress-bar">
-            <div class="progress-fill"></div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- استخدام مسار نسبي لملف المدخل لضمان نجاح البناء في Vercel -->
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
   </body>
 </html>
