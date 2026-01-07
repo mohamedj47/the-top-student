@@ -1,5 +1,5 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "@google/genai"; 
 
 export const config = {
   runtime: "edge",
