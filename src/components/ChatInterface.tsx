@@ -125,7 +125,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-10 space-y-6 scrollbar-hide">
-          <div className="max-w-4xl mx-auto w-full">
+          <div className="max-w-4xl mx-auto w-full chat-container">
             {messages.map(m => <MessageBubble key={m.id} message={m} subject={subject} />)}
             <div ref={messagesEndRef} />
           </div>
