@@ -6,7 +6,7 @@ export interface StaticContent {
   subject: Subject;
   grade: GradeLevel;
   language: StudyLanguage;
-  explanation: string;
+  explanation: string; 
   summary: string;
   practice: string;
   keyPoints: string;
