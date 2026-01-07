@@ -6,7 +6,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const getEnv = (key: string): string => {
   if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
     const env = (import.meta as any).env;
-    return env[key] || env[`VITE_${key}`] || '';
+    return env[key] || env[`VITE_${key}`] || ''; 
   }
 
   // fallback
