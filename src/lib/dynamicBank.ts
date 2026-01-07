@@ -16,7 +16,7 @@ export function generateActivationCode(deviceId: string): string {
 export interface DynamicQuestion {
   question: string;
   answer: string;
-  subject: string;
+  subject: string; 
   grade: string;
   timestamp: number;
   timesAsked: number;
