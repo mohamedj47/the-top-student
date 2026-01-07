@@ -4,7 +4,7 @@
  * يحقق الربط الصارم بين الجهاز، الكود، والفصل الدراسي
  */
 
-const SALT = "TOP_STUDENT_PRO_2026_SECRET_SYSTEM";
+const SALT = "TOP_STUDENT_PRO_2026_SECRET_SYSTEM"; 
 
 export interface SubscriptionData {
   deviceId: string;
