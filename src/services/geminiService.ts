@@ -4,7 +4,7 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import { DynamicQuestionBank } from "../lib/dynamicBank";
 import { markKeyAsFailed, getApiKey } from "../utils/apiKeyManager";
 import { getCurriculumStringForAI } from "../data/curriculum";
-import { localContentRepository, questionsBank } from "../lib/questionsBank";
+import { localContentRepository, questionsBank } from "../lib/questionsBank"; 
 
 export function cleanMathNotation(text: string): string {
   if (!text) return "";
