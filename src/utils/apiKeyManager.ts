@@ -1,9 +1,4 @@
 
-/**
- * نظام إدارة المفاتيح الذكي - إصدار الإنتاج الضخم (10,000+ طالب)
- * يعتمد على خوارزمية التوزيع بناءً على معرف الجهاز (Deterministic Sharding)
- */
-
 interface KeyStatus {
   key: string;
   id: string;
@@ -24,9 +19,8 @@ const KEYS_POOL: string[] = [
   process.env.API_KEY_9,
   process.env.API_KEY_10,
   process.env.API_KEY_11
-].filter(k => k && k.length > 10) as string[];
+].filter(k => typeof k === 'string' && k.length > 10) as string[];
 
-// حالة المفاتيح في الذاكرة
 const keyRegistry: KeyStatus[] = KEYS_POOL.map((key, index) => ({
   key,
   id: `key_${index}`,
@@ -34,61 +28,51 @@ const keyRegistry: KeyStatus[] = KEYS_POOL.map((key, index) => ({
   isCoolingDown: false
 }));
 
-const COOLDOWN_PERIOD = 45 * 1000; // تقليل فترة التبريد لـ 45 ثانية لسرعة العودة
+const COOLDOWN_PERIOD = 90 * 1000;
 
-/**
- * دالة بسيطة لعمل Hash لمعرف الجهاز لتحويله إلى رقم
- */
-const hashString = (str: string): number => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-};
-
-/**
- * اختيار أفضل مفتاح متاح حالياً مع توزيع الطلاب
- */
-export const getApiKey = (): string => {
+export function getApiKey(excludeKey?: string): string {
   if (keyRegistry.length === 0) return process.env.API_KEY || '';
   
-  const deviceId = typeof window !== 'undefined' ? localStorage.getItem('device_id') || 'guest' : 'server';
   const now = Date.now();
-  
-  // 1. تنظيف المفاتيح من فترة التبريد
   keyRegistry.forEach(item => {
     if (item.isCoolingDown && (now - item.failedAt > COOLDOWN_PERIOD)) {
       item.isCoolingDown = false;
     }
   });
 
-  // 2. تحديد نقطة البداية للطالب الحالي (Load Balancing)
-  const startIndex = hashString(deviceId) % keyRegistry.length;
-
-  // 3. البحث عن مفتاح سليم بدءاً من حصة الطالب
-  for (let i = 0; i < keyRegistry.length; i++) {
-    const currentIndex = (startIndex + i) % keyRegistry.length;
-    const candidate = keyRegistry[currentIndex];
-    if (!candidate.isCoolingDown) return candidate.key;
+  let availableKeys = keyRegistry.filter(item => !item.isCoolingDown && item.key !== excludeKey);
+  
+  if (availableKeys.length === 0 && excludeKey) {
+    availableKeys = keyRegistry.filter(item => item.key !== excludeKey);
   }
 
-  // 4. إذا تعطل الكل، نأخذ المفتاح الأقدم فشلاً لمحاولة الإنقاذ
-  const oldestFailed = [...keyRegistry].sort((a, b) => a.failedAt - b.failedAt)[0];
-  return oldestFailed.key;
-};
+  if (availableKeys.length > 0) {
+    const randomIndex = Math.floor(Math.random() * availableKeys.length);
+    return availableKeys[randomIndex].key;
+  }
 
-export const markKeyAsFailed = (failedKey: string) => {
+  return keyRegistry[0]?.key || process.env.API_KEY || '';
+}
+
+export function getAvailableKeys(): string[] {
+  const now = Date.now();
+  keyRegistry.forEach(item => {
+    if (item.isCoolingDown && (now - item.failedAt > COOLDOWN_PERIOD)) {
+      item.isCoolingDown = false;
+    }
+  });
+  return keyRegistry.filter(item => !item.isCoolingDown).map(item => item.key);
+}
+
+export function markKeyAsFailed(failedKey: string): void {
   const item = keyRegistry.find(i => i.key === failedKey);
   if (item) {
     item.failedAt = Date.now();
     item.isCoolingDown = true;
-    console.warn(`❌ [API Monitor] Key ${item.id} reached quota. Cooling down...`);
+    console.warn(`[Quota Shield] Key ${item.id} entered cooldown state.`);
   }
-};
+}
 
-export const ensureApiKey = async (): Promise<boolean> => {
-  const currentKey = getApiKey();
-  return !!(currentKey && currentKey.length > 10);
-};
+export async function ensureApiKey(): Promise<boolean> {
+  return KEYS_POOL.length > 0;
+}
