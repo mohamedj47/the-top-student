@@ -6,7 +6,7 @@ export const FloatingTools: React.FC = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null); 
   const sourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const isSpeakingRef = useRef(false);
 
