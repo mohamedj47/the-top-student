@@ -6,7 +6,7 @@
       "has": [
         {
           "type": "host",
-          "value": "the-top-student-nu.vercel.app"
+          "value": "the-top-student-nu.vercel.app" 
         }
       ],
       "destination": "https://the-top-student-9c8n.vercel.app/$1",
