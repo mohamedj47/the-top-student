@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Send, Bot, User, Sparkles, Key, HelpCircle, Zap, 
   Image as ImageIcon, CheckCircle2, AlertCircle, 
-  BrainCircuit, GraduationCap, Info, Lightbulb, Clock, ArrowRight, Share2, Copy, Users, TrendingUp, BarChart3 
+  BrainCircuit, GraduationCap, Info, Lightbulb, Clock, ArrowRight, Share2, Copy, Users, TrendingUp, BarChart3
 } from 'lucide-react';
 import { MessageBubble } from '../components/MessageBubble';
 import { questionsBank } from '../lib/questionsBank';
@@ -116,12 +116,14 @@ export default function SmartTutorPage() {
           id: (Date.now() + 1).toString(),
           sender: Sender.BOT, 
           type: 'cached',
-          text: staticResult.answer,
+          // Fix: fallback to explanation if answer is not provided (e.g. from localContentRepository)
+          text: (staticResult as any).answer || (staticResult as any).explanation,
           timestamp: new Date(),
           metadata: {
             subject: staticResult.subject,
-            difficulty: staticResult.difficulty === 'easy' ? 'سهل' : 'متوسط',
-            readingTime: staticResult.readingTime
+            // Fix: safely handle optional difficulty and readingTime properties
+            difficulty: (staticResult as any).difficulty ? ((staticResult as any).difficulty === 'easy' ? 'سهل' : 'متوسط') : undefined,
+            readingTime: (staticResult as any).readingTime
           }
         }]);
         setIsLoading(false);
