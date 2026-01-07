@@ -100,5 +100,3 @@ export const KnowledgeNotebook: React.FC<KnowledgeNotebookProps> = ({ isOpen, on
     </div>
   );
 };
-
-export default KnowledgeNotebook;
