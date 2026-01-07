@@ -1,1 +1,1 @@
-// Type definitions
+/// <reference types="vite/client" />
