@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { ShieldCheck, Copy, RefreshCw, Lock, Home, Smartphone, AlertCircle } from 'lucide-react';
-import { generateActivationCode } from '../lib/dynamicBank';
+import { generateActivationCode } from '../lib/dynamicBank'; 
 
 const ADMIN_PASS = "202625";
 
