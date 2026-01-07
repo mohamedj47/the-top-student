@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Send, Bot, User, Sparkles, Key, HelpCircle, Zap, 
   Image as ImageIcon, CheckCircle2, AlertCircle, 
-  BrainCircuit, GraduationCap, Info, Lightbulb, Clock, ArrowRight, Share2, Copy, Users, TrendingUp, BarChart3
+  BrainCircuit, GraduationCap, Info, Lightbulb, Clock, ArrowRight, Share2, Copy, Users, TrendingUp, BarChart3 
 } from 'lucide-react';
 import { MessageBubble } from '../components/MessageBubble';
 import { questionsBank } from '../lib/questionsBank';
