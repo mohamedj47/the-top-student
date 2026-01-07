@@ -1,6 +1,6 @@
 
 import { Subject, GradeLevel } from '../types';
-
+ 
 // 1. Default Teachers Mapping (One per subject)
 export const DEFAULT_TEACHERS: Partial<Record<Subject, string>> = {
   [Subject.ARABIC]: "رضا الفاروق",
