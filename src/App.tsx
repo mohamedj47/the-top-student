@@ -310,7 +310,10 @@ const App: React.FC = () => {
               </button>
             </div>
           </main>
+console.log('URL =', import.meta.env.VITE_SUPABASE_URL);
+console.log('KEY =', import.meta.env.VITE_SUPABASE_ANON_KEY);
 
+          
           <footer className="w-full max-w-7xl mx-auto p-8 border-t border-slate-100 flex flex-col md:flex-row items-center justify-between gap-6">
              <div className="flex gap-4">
                 <button onClick={toggleAdmin} className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-black text-sm">دخول الإدارة</button>
