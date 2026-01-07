@@ -1,5 +1,4 @@
-
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * محرك الربط مع Supabase
@@ -7,13 +6,10 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
  */
 
 const getEnv = (key: string): string => {
-  // البحث في متغيرات Vite التعريفية (المحقونة عبر vite.config.ts)
   // @ts-ignore
   if (typeof process !== 'undefined' && process.env && process.env[key]) {
     return process.env[key] || '';
   }
-  // البحث في import.meta.env الافتراضي لـ Vite
-  // Fix: Use type casting (import.meta as any) to resolve "Property 'env' does not exist on type 'ImportMeta'" errors
   if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
     const metaEnv = (import.meta as any).env;
     return (metaEnv[key] || metaEnv[`VITE_${key}`] || "") as string;
@@ -40,7 +36,6 @@ export const getSupabaseStatus = () => {
     isUrlValid,
     isKeyFormatCorrect: isKeyValid,
     isConnected: isSupabaseConnected(),
-    // إظهار بدايات المفاتيح للتشخيص فقط (أمنياً لا تظهر المفتاح كاملاً)
     urlPrefix: supabaseUrl ? supabaseUrl.substring(0, 15) : "Missing",
     keyPrefix: supabaseAnonKey ? supabaseAnonKey.substring(0, 8) : "Missing"
   };
