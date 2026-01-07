@@ -5,7 +5,7 @@ export class AudioCache {
 
   private static async getDB(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.DB_NAME, 1);
+      const request = indexedDB.open(this.DB_NAME, 1); 
       request.onupgradeneeded = () => request.result.createObjectStore(this.STORE_NAME);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
