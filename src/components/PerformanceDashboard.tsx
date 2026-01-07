@@ -4,7 +4,7 @@ import { PerformanceMetrics, Subject } from '../types';
 import { Target, Brain, Zap, LineChart, Award, ChevronLeft, CheckCircle2, AlertCircle, Sparkles, TrendingUp } from 'lucide-react';
 
 interface PerformanceDashboardProps {
-  subject: Subject;
+  subject: Subject; 
   metrics: PerformanceMetrics;
   onClose: () => void;
 }
