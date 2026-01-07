@@ -1,28 +1,36 @@
+
 // استيراد مباشر من CDN لضمان التوافق مع المتصفح (Vite)
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
 /**
  * محرك الربط مع Supabase
- * متوافق مع Vite ويقرأ Environment Variables بشكل صحيح
+ * تم التحديث لدعم كافة صيغ المفاتيح:
+ * 1. الصيغة القديمة (Legacy): تبدأ بـ eyJ
+ * 2. الصيغة الجديدة (Modern): تبدأ بـ sb_publishable
  */
 
-// قراءة المتغيرات من Vite
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// القراءة من المتغيرات المحقونة
+const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
+const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
 
 /**
- * التحقق المبدئي من القيم
+ * التحقق من الرابط
  */
 const isUrlValid =
   typeof supabaseUrl === 'string' &&
+  supabaseUrl.length > 10 &&
   supabaseUrl.startsWith('http') &&
   supabaseUrl.includes('.supabase.co');
 
+/**
+ * التحقق من المفتاح (دعم الصيغتين eyJ و sb_)
+ */
 const isKeyValid =
   typeof supabaseAnonKey === 'string' &&
   (
-    supabaseAnonKey.trim().startsWith('eyJ') || // JWT القديم
-    supabaseAnonKey.trim().startsWith('sb_')    // Publishable الجديد
+    supabaseAnonKey.startsWith('eyJ') || 
+    supabaseAnonKey.startsWith('sb_publishable') ||
+    supabaseAnonKey.startsWith('sb_') // دعم إضافي لأي مفتاح يبدأ بـ sb
   );
 
 /**
@@ -30,7 +38,7 @@ const isKeyValid =
  */
 export const supabase: SupabaseClient | null =
   isUrlValid && isKeyValid
-    ? createClient(supabaseUrl!, supabaseAnonKey!, {
+    ? createClient(supabaseUrl, supabaseAnonKey, {
         realtime: {
           params: { eventsPerSecond: 10 }
         },
@@ -42,24 +50,25 @@ export const supabase: SupabaseClient | null =
     : null;
 
 /**
- * فحص الاتصال الحقيقي
+ * فحص الاتصال
  */
 export const isSupabaseConnected = (): boolean => {
   return isUrlValid && isKeyValid && supabase !== null;
 };
 
 /**
- * تقرير حالة مفصل (للدعم وواجهة التشخيص)
+ * تقرير حالة مفصل يظهر في واجهة المستخدم للمساعدة في التشخيص
  */
 export const getSupabaseStatus = () => {
   return {
-    hasUrl: Boolean(supabaseUrl),
-    hasKey: Boolean(supabaseAnonKey),
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseAnonKey,
     isUrlValid,
     isKeyFormatCorrect: isKeyValid,
-    isStripeKeyDetected:
-      typeof supabaseAnonKey === 'string' &&
-      (supabaseAnonKey.startsWith('sk_') || supabaseAnonKey.startsWith('pk_')),
+    // Fix: Add isSecretKeyDetected to match expected type in ChatInterface.tsx
+    isSecretKeyDetected: typeof supabaseAnonKey === 'string' && supabaseAnonKey.startsWith('sb_secret'),
+    // إظهار تلميح للمستخدم بناءً على الرابط الذي أرسله في الشات
+    urlHint: "hqaozutxjfvbrplorxhv",
     isConnected: isSupabaseConnected()
   };
 };
