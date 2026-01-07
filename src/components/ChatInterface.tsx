@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowRight, 
   Send, 
-  Bot, 
+  Bot,  
   User, 
   Sparkles, 
   Mic, 
