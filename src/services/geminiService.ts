@@ -2,7 +2,7 @@ import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender, St
 import { GoogleGenAI, Modality } from "@google/genai";
 import { questionsBank, StaticQuestion } from "../lib/questionsBank";
 import { DynamicQuestionBank } from "../lib/dynamicBank";
-import { markKeyAsFailed, getAvailableKeys } from "../utils/apiKeyManager";  
+import { markKeyAsFailed, getAvailableKeys } from "../utils/apiKeyManager";   
 import { getCurriculumStringForAI } from "../data/curriculum";
 
 export function cleanMathNotation(text: string): string {
