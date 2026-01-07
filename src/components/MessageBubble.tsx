@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Message, Sender, Subject } from '../types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Bot, User, Volume2, StopCircle, Loader2, Play, Radio, Share2, Download } from 'lucide-react';
+import { Bot, User, Volume2, StopCircle, Loader2, Play, Radio, Share2, Download } from 'lucide-react'; 
 import { 
   streamSpeech, 
   generateGeminiSpeech, 
