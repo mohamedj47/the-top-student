@@ -30,14 +30,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const historyKey = `history_v4_${grade}_${subject}`;
+    const historyKey = `history_v5_${grade}_${subject}`;
     const saved = localStorage.getItem(historyKey);
     if (saved) setMessages(JSON.parse(saved).map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
     else setMessages([{ id: '1', text: `أهلاً بك يا بطل في استوديو **${subject}** المطور. أنا معلمك الخاص، كيف نكتسح المنهج اليوم؟`, sender: Sender.BOT, timestamp: new Date() }]);
   }, [subject, grade]);
 
   useEffect(() => {
-    localStorage.setItem(`history_v4_${grade}_${subject}`, JSON.stringify(messages));
+    localStorage.setItem(`history_v5_${grade}_${subject}`, JSON.stringify(messages));
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
