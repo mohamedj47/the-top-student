@@ -7,7 +7,7 @@ interface KeyStatus {
 }
 
 const KEYS_POOL: string[] = [
-  process.env.API_KEY, 
+  process.env.API_KEY,  
   process.env.API_KEY_1,
   process.env.API_KEY_2,
   process.env.API_KEY_3,
