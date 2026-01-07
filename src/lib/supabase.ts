@@ -3,10 +3,10 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
 
 /**
  * محرك الربط مع Supabase
- * نسخة Vite / Browser صحيحة 100%
+ * متوافق مع Vite ويقرأ Environment Variables بشكل صحيح
  */
 
-// قراءة المتغيرات من Vite فقط
+// قراءة المتغيرات من Vite
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
@@ -27,7 +27,6 @@ const isKeyValid =
 
 /**
  * إنشاء عميل Supabase
- * ⚠️ لا نُنشئ client بقيم فارغة أبدًا
  */
 export const supabase: SupabaseClient | null =
   isUrlValid && isKeyValid
@@ -46,20 +45,20 @@ export const supabase: SupabaseClient | null =
  * فحص الاتصال الحقيقي
  */
 export const isSupabaseConnected = (): boolean => {
-  return isUrlValid && isKeyValid;
+  return isUrlValid && isKeyValid && supabase !== null;
 };
 
 /**
- * تقرير حالة مفصل (لـ UI أو Debug)
+ * تقرير حالة مفصل (للدعم وواجهة التشخيص)
  */
 export const getSupabaseStatus = () => {
   return {
-    hasUrl: !!supabaseUrl,
-    hasKey: !!supabaseAnonKey,
+    hasUrl: Boolean(supabaseUrl),
+    hasKey: Boolean(supabaseAnonKey),
     isUrlValid,
     isKeyFormatCorrect: isKeyValid,
     isStripeKeyDetected:
-      !!supabaseAnonKey &&
+      typeof supabaseAnonKey === 'string' &&
       (supabaseAnonKey.startsWith('sk_') || supabaseAnonKey.startsWith('pk_')),
     isConnected: isSupabaseConnected()
   };
