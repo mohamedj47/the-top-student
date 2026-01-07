@@ -13,7 +13,7 @@ export async function speakWithKore(text: string) {
 
       if (!kore) {
         reject();
-        return;
+        return; 
       }
 
       const utter = new SpeechSynthesisUtterance(text);
