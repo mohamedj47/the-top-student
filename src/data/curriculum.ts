@@ -2,7 +2,7 @@
 import { GradeLevel, Subject } from '../types';
 
 export interface CurriculumSplit {
-  term1: string[];
+  term1: string[]; 
   term2: string[];
 }
 
