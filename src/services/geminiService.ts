@@ -1,10 +1,9 @@
-
 import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender, StudyLanguage } from "../types";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { questionsBank, StaticQuestion } from "../lib/questionsBank";
 import { DynamicQuestionBank } from "../lib/dynamicBank";
 import { markKeyAsFailed, getAvailableKeys } from "../utils/apiKeyManager";
-import { getCurriculumStringForAI } from "../components/data/curriculum";
+import { getCurriculumStringForAI } from "../data/curriculum";
 
 export function cleanMathNotation(text: string): string {
   if (!text) return "";
@@ -77,7 +76,6 @@ export async function decodePcmAudio(
 export async function generatePodcastAudio(topic: string, content: string): Promise<string | null> {
   const availableKeys = getAvailableKeys();
   
-  // المحاولة عبر المفاتيح المتاحة واحداً تلو الآخر
   for (const apiKey of availableKeys) {
     try {
       const ai = new GoogleGenAI({ apiKey });
@@ -112,9 +110,8 @@ export async function generatePodcastAudio(topic: string, content: string): Prom
     } catch (e: any) {
       if (e?.message?.includes('429')) {
         markKeyAsFailed(apiKey);
-        continue; // انتقل للمفتاح التالي فوراً
+        continue;
       }
-      console.error("Podcast specific error:", e);
     }
   }
   return null;
@@ -180,7 +177,6 @@ export async function generateStreamResponse(
         onChunk(cleanMathNotation(fullText));
       }
       
-      // حفظ في البنك الديناميكي للأوفلاين
       if (fullText.length > 50) {
         DynamicQuestionBank.add(userMessage, fullText, subject, grade, deviceId || 'local');
       }
@@ -189,12 +185,11 @@ export async function generateStreamResponse(
     } catch (error: any) {
       if (error?.message?.includes('429')) {
         markKeyAsFailed(apiKey);
-        continue; // جرب مفتاحاً آخر للرد النصي أيضاً
+        continue;
       }
     }
   }
   
-  // الحل الأخير: البحث في المحتوى المخزن مسبقاً إذا تعطلت كل المفاتيح
   const dynamicMatch = await DynamicQuestionBank.search(userMessage, subject);
   if (dynamicMatch) {
     const text = "### [رد من الذاكرة الاحتياطية] 💾\n\n" + dynamicMatch.answer;
@@ -214,7 +209,56 @@ export async function streamSpeech(text: string, onComplete?: () => void): Promi
   window.speechSynthesis.speak(utterance);
 }
 
-/**
- * اسم بديل لـ streamSpeech لحل مشاكل البناء في Vercel
- */
-export const generateAiSpeech = streamSpeech;
+export async function generateAiSpeech(text: string, onComplete?: () => void): Promise<void> {
+  return streamSpeech(text, onComplete);
+}
+
+export const generateNeuralPart = generateGeminiSpeech;
+
+export async function generatePodcastData(topic: string, content: string): Promise<{ audio: string | null }> {
+  const audio = await generatePodcastAudio(topic, content);
+  return { audio };
+}
+
+export function splitIntoChunks(text: string, maxLength: number = 200): string[] {
+  const chunks: string[] = [];
+  let current = text;
+  while (current.length > 0) {
+    if (current.length <= maxLength) {
+      chunks.push(current);
+      break;
+    }
+    let splitIdx = current.lastIndexOf(' ', maxLength);
+    if (splitIdx === -1) splitIdx = maxLength;
+    chunks.push(current.substring(0, splitIdx));
+    current = current.substring(splitIdx).trim();
+  }
+  return chunks;
+}
+
+export async function generateFinalMemo(subject: Subject, grade: GradeLevel): Promise<string> {
+  const availableKeys = getAvailableKeys();
+  for (const apiKey of availableKeys) {
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const curriculumStr = getCurriculumStringForAI(grade, subject);
+      const prompt = `أنت خبير تعليمي. قم بإعداد "عصارة ليلة الامتحان" لمادة ${subject} للصف ${grade}.
+        المنهج: ${curriculumStr}
+        المحتوى المطلوب:
+        1. أهم 20 نقطه لا يخرج عنها الامتحان.
+        2. ملخص القوانين أو المفاهيم الأساسية.
+        3. خريطة ذهنية سريعة (بالنص).
+        4. نصيحة أخيرة للمتفوقين.
+        اجعل التنسيق جميلاً باستخدام Markdown.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      });
+      return response.text || "عذراً، تعذر توليد المذكرة حالياً.";
+    } catch (e: any) {
+      if (e?.message?.includes('429')) markKeyAsFailed(apiKey);
+    }
+  }
+  return "عذراً، جميع المحركات مجهدة حالياً. حاول مرة أخرى في وقت لاحق.";
+}
