@@ -1,20 +1,54 @@
 
-// استيراد مباشر من CDN لضمان التوافق مع المتصفح (Vite)
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
 /**
- * محرك الربط مع Supabase
- * تم التحديث لدعم كافة صيغ المفاتيح:
- * 1. الصيغة القديمة (Legacy): تبدأ بـ eyJ
- * 2. الصيغة الجديدة (Modern): تبدأ بـ sb_publishable
+ * محرك الربط مع Supabase (الإصدار الذهبي المطور)
+ * تم التحديث لضمان التقاط المفاتيح من Vercel Env بكافة الطرق الممكنة.
  */
 
-// القراءة من المتغيرات المحقونة
-const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
-const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
+// تعريف المتغيرات المحقونة من Vite بشكل صريح
+declare const __SUPABASE_URL__: string;
+declare const __SUPABASE_KEY__: string;
+
+const getSupabaseUrl = () => {
+  let url = "";
+  // 1. المحاولة الأولى: المتغير العالمي المحقون من vite.config
+  try { url = __SUPABASE_URL__; } catch (e) {}
+  
+  // 2. المحاولة الثانية: البحث في process.env بكافة الصيغ
+  if (!url) {
+    url = (
+      process.env.VITE_SUPABASE_URL || 
+      process.env.NEXT_PUBLIC_SUPABASE_URL || 
+      process.env.SUPABASE_URL || 
+      ""
+    ).trim();
+  }
+  return url;
+};
+
+const getSupabaseKey = () => {
+  let key = "";
+  // 1. المحاولة الأولى: المتغير العالمي المحقون من vite.config
+  try { key = __SUPABASE_KEY__; } catch (e) {}
+  
+  // 2. المحاولة الثانية: البحث في process.env بكافة الصيغ
+  if (!key) {
+    key = (
+      process.env.VITE_SUPABASE_ANON_KEY || 
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+      process.env.SUPABASE_ANON_KEY || 
+      ""
+    ).trim();
+  }
+  return key;
+};
+
+const supabaseUrl = getSupabaseUrl();
+const supabaseAnonKey = getSupabaseKey();
 
 /**
- * التحقق من الرابط
+ * التحقق من صحة الرابط
  */
 const isUrlValid =
   typeof supabaseUrl === 'string' &&
@@ -23,29 +57,24 @@ const isUrlValid =
   supabaseUrl.includes('.supabase.co');
 
 /**
- * التحقق من المفتاح (دعم الصيغتين eyJ و sb_)
+ * التحقق من صحة المفتاح (دعم الصيغة القديمة والجديدة)
  */
 const isKeyValid =
   typeof supabaseAnonKey === 'string' &&
   (
     supabaseAnonKey.startsWith('eyJ') || 
     supabaseAnonKey.startsWith('sb_publishable') ||
-    supabaseAnonKey.startsWith('sb_') // دعم إضافي لأي مفتاح يبدأ بـ sb
+    supabaseAnonKey.startsWith('sb_')
   );
 
 /**
- * إنشاء عميل Supabase
+ * إنشاء العميل
  */
 export const supabase: SupabaseClient | null =
   isUrlValid && isKeyValid
     ? createClient(supabaseUrl, supabaseAnonKey, {
-        realtime: {
-          params: { eventsPerSecond: 10 }
-        },
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true
-        }
+        realtime: { params: { eventsPerSecond: 10 } },
+        auth: { persistSession: true, autoRefreshToken: true }
       })
     : null;
 
@@ -57,18 +86,18 @@ export const isSupabaseConnected = (): boolean => {
 };
 
 /**
- * تقرير حالة مفصل يظهر في واجهة المستخدم للمساعدة في التشخيص
+ * تشخيص الحالة للواجهة الأمامية
  */
 export const getSupabaseStatus = () => {
   return {
-    hasUrl: !!supabaseUrl,
-    hasKey: !!supabaseAnonKey,
+    hasUrl: !!supabaseUrl && supabaseUrl.length > 5,
+    hasKey: !!supabaseAnonKey && supabaseAnonKey.length > 5,
     isUrlValid,
     isKeyFormatCorrect: isKeyValid,
-    // Fix: Add isSecretKeyDetected to match expected type in ChatInterface.tsx
-    isSecretKeyDetected: typeof supabaseAnonKey === 'string' && supabaseAnonKey.startsWith('sb_secret'),
-    // إظهار تلميح للمستخدم بناءً على الرابط الذي أرسله في الشات
-    urlHint: "hqaozutxjfvbrplorxhv",
+    isSecretKeyDetected: typeof supabaseAnonKey === 'string' && (supabaseAnonKey.includes('secret') || supabaseAnonKey.startsWith('sb_secret')),
+    // تلميح أمان: نظهر أجزاء فقط للتأكد من وصول البيانات
+    urlPrefix: supabaseUrl ? supabaseUrl.substring(0, 15) : "Missing",
+    keyPrefix: supabaseAnonKey ? supabaseAnonKey.substring(0, 8) : "Missing",
     isConnected: isSupabaseConnected()
   };
 };
