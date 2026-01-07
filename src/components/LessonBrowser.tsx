@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { X, PlayCircle, BookOpen, Sparkles, Calendar, AlertCircle } from 'lucide-react';
 import { GradeLevel, Subject, StudyLanguage } from '../types';
 import { getCurriculumFor } from '../data/curriculum';
-import { getVideoForLesson, VideoResult } from '../data/videoData';
+import { getVideoForLesson, VideoResult } from '../data/videoData'; 
 
 interface LessonBrowserProps {
   isOpen: boolean;
