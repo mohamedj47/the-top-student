@@ -2,7 +2,7 @@
 import React from 'react';
 import { X, ExternalLink, Youtube } from 'lucide-react';
 import { VideoResult } from '../data/videoData';
- 
+
 interface YouTubeModalProps {
   isOpen: boolean;
   onClose: () => void;
