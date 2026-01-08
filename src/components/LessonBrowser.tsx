@@ -26,17 +26,9 @@ export const LessonBrowser: React.FC<LessonBrowserProps> = ({
   const term1Lessons = curriculum.term1 || [];
   const term2Lessons = curriculum.term2 || [];
 
-  const handleVideoClick = (e: React.MouseEvent, lesson: string) => {
-    e.preventDefault();
-    e.stopPropagation(); // Ensure the click doesn't trigger parent events
+  const handleVideoClick = (lesson: string) => {
     const videoData = getVideoForLesson(grade, subject, lesson);
     onPlayVideo(lesson, videoData);
-  };
-
-  const handleExplainClick = (e: React.MouseEvent, lesson: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onExplain(lesson);
   };
 
   const currentLessons = activeTab === 'term1' ? term1Lessons : term2Lessons;
@@ -78,7 +70,6 @@ export const LessonBrowser: React.FC<LessonBrowserProps> = ({
           {/* Term Tabs */}
           <div className="flex bg-slate-100 p-1 rounded-xl">
              <button 
-                type="button"
                 onClick={() => setActiveTab('term1')}
                 className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
                     activeTab === 'term1' 
@@ -89,7 +80,6 @@ export const LessonBrowser: React.FC<LessonBrowserProps> = ({
                 {t.term1}
              </button>
              <button 
-                type="button"
                 onClick={() => setActiveTab('term2')}
                 className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
                     activeTab === 'term2' 
@@ -115,8 +105,7 @@ export const LessonBrowser: React.FC<LessonBrowserProps> = ({
                 
                 <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
                   <button 
-                    type="button"
-                    onClick={(e) => handleExplainClick(e, lesson)}
+                    onClick={() => onExplain(lesson)}
                     className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white px-3 py-2 rounded-lg transition-all active:scale-95 border border-indigo-100"
                   >
                     <Sparkles size={16} />
@@ -124,8 +113,7 @@ export const LessonBrowser: React.FC<LessonBrowserProps> = ({
                   </button>
 
                   <button 
-                    type="button"
-                    onClick={(e) => handleVideoClick(e, lesson)}
+                    onClick={() => handleVideoClick(lesson)}
                     className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white px-3 py-2 rounded-lg transition-all active:scale-95 border border-red-100"
                   >
                     <PlayCircle size={16} />
