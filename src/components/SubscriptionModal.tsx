@@ -16,7 +16,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ forceOpen,
   const [viewState, setViewState] = useState<'loading' | 'hidden' | 'locked' | 'manual'>('loading');
   const [deviceId, setDeviceId] = useState('');
   const [inputCode, setInputCode] = useState('');
-  const [error, setError] = useState(''); 
+  const [error, setError] = useState('');
   const [selectedGrade, setSelectedGrade] = useState<string>('');
 
   useEffect(() => {
