@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Message, Sender, Subject } from '../types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Bot, User, Volume2, StopCircle, Loader2, Play, Radio, Share2, Headphones } from 'lucide-react';
+import { Bot, User, Volume2, StopCircle, Loader2, Play, Radio, Share2, ShieldCheck, CheckCircle2, MessageSquare, Headphones } from 'lucide-react';
 import { 
   streamSpeech, 
   generateGeminiSpeech, 
@@ -64,33 +64,19 @@ export const MessageBubble: React.FC<{ message: Message, subject?: Subject, onQu
     setIsPodcastLoading(true);
     setIsSpeaking(true);
     try {
-      // استخدام الدالة الصحيحة المصدّرة من geminiService
-      const { audio } = await generatePodcastData(subject || "درسنا اليوم", message.text);
+      const { audio, script } = await generatePodcastData(subject || "درسنا اليوم", message.text);
       setIsPodcastLoading(false);
-      
       if (audio) {
-        if (!audioContextRef.current) {
-          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-        }
-        const ctx = audioContextRef.current;
-        const buffer = await decodePcmAudio(decodeBase64(audio), ctx, 24000, 1);
-        const source = ctx.createBufferSource();
+        if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const buffer = await decodePcmAudio(decodeBase64(audio), audioContextRef.current, 24000, 1);
+        const source = audioContextRef.current.createBufferSource();
         source.buffer = buffer;
-        source.connect(ctx.destination);
+        source.connect(audioContextRef.current.destination);
         source.start();
         activeSourcesRef.current.add(source);
-        source.onended = () => { 
-          activeSourcesRef.current.delete(source); 
-          if (activeSourcesRef.current.size === 0) setIsSpeaking(false); 
-        };
-      } else {
-        setIsSpeaking(false);
-      }
-    } catch (e) {
-      console.error("Podcast generation failed:", e);
-      setIsPodcastLoading(false);
-      setIsSpeaking(false);
-    }
+        source.onended = () => { activeSourcesRef.current.delete(source); setIsSpeaking(false); };
+      } else { setIsSpeaking(false); }
+    } catch (e) { setIsPodcastLoading(false); setIsSpeaking(false); }
   };
 
   const handlePlayText = async (textToPlay: string) => {
@@ -100,13 +86,10 @@ export const MessageBubble: React.FC<{ message: Message, subject?: Subject, onQu
     try {
       const cleanText = sanitizeForSpeech(textToPlay);
       const cacheKey = AudioCache.generateKey(cleanText);
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
+      if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       const ctx = audioContextRef.current;
       const cached = await AudioCache.get(cacheKey);
       let buffer: AudioBuffer | null = null;
-      
       if (cached) {
         buffer = await decodePcmAudio(decodeBase64(cached), ctx, 24000, 1);
       } else {
@@ -116,7 +99,6 @@ export const MessageBubble: React.FC<{ message: Message, subject?: Subject, onQu
           await AudioCache.save(cacheKey, geminiAudio);
         }
       }
-      
       setIsAiSpeechLoading(false);
       if (buffer) {
         const source = ctx.createBufferSource();
@@ -124,17 +106,9 @@ export const MessageBubble: React.FC<{ message: Message, subject?: Subject, onQu
         source.connect(ctx.destination);
         source.start();
         activeSourcesRef.current.add(source);
-        source.onended = () => { 
-          activeSourcesRef.current.delete(source); 
-          if (activeSourcesRef.current.size === 0) setIsSpeaking(false); 
-        };
-      } else { 
-        await streamSpeech(cleanText, () => setIsSpeaking(false)); 
-      }
-    } catch (err) { 
-      setIsAiSpeechLoading(false); 
-      await streamSpeech(textToPlay, () => setIsSpeaking(false)); 
-    }
+        source.onended = () => { activeSourcesRef.current.delete(source); if (activeSourcesRef.current.size === 0) setIsSpeaking(false); };
+      } else { await streamSpeech(cleanText, () => setIsSpeaking(false)); }
+    } catch (err) { setIsAiSpeechLoading(false); await streamSpeech(textToPlay, () => setIsSpeaking(false)); }
   };
 
   return (
@@ -151,14 +125,12 @@ export const MessageBubble: React.FC<{ message: Message, subject?: Subject, onQu
                     <button onClick={() => handlePlayText(message.text)} className={`p-1.5 rounded-lg transition-all ${isSpeaking && !isPodcastLoading ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-500'}`}>
                       {isAiSpeechLoading ? <Loader2 size={12} className="animate-spin" /> : (isSpeaking && !isPodcastLoading ? <StopCircle size={12} /> : <Volume2 size={12} />)}
                     </button>
-                    <button onClick={handlePodcast} className={`p-1.5 rounded-lg transition-all flex items-center gap-1 ${isPodcastLoading ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600'}`} title="بودكاست الشرح الذكي">
+                    <button onClick={handlePodcast} className={`p-1.5 rounded-lg transition-all flex items-center gap-1 ${isPodcastLoading ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600'}`} title="بودكاست كريم ونهى">
                       {isPodcastLoading ? <Loader2 size={12} className="animate-spin" /> : <Headphones size={12} />}
-                      <span className="text-[8px] font-black uppercase">Podcast</span>
+                      <span className="text-[8px] font-black">بودكاست</span>
                     </button>
                 </div>
-                <div className="flex items-center gap-1">
-                   <span className="text-[9px] font-black text-slate-400">Smart Teacher v4.0</span>
-                </div>
+                <span className="text-[9px] font-black text-slate-400">Dr. AI Tutor</span>
               </div>
             )}
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
