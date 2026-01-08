@@ -1,41 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Printer, Volume2, VolumeX, Loader2 } from 'lucide-react';
+
+import React, { useState } from 'react';
+import { Printer, Volume2, VolumeX, Loader2, Play, Info } from 'lucide-react';
 import { streamSpeech } from '../services/geminiService';
 
 export const FloatingTools: React.FC = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const audioContextRef = useRef<AudioContext | null>(null); 
-  const sourcesRef = useRef<AudioBufferSourceNode[]>([]);
-  const isSpeakingRef = useRef(false);
-
-  useEffect(() => {
-    return () => {
-      stopAudio();
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
-    };
-  }, []);
-
+  
   const stopAudio = () => {
-    isSpeakingRef.current = false;
-
-    sourcesRef.current.forEach(source => {
-      try {
-        source.stop();
-      } catch {}
-    });
-
-    sourcesRef.current = [];
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
     setIsSpeaking(false);
-    setIsLoading(false);
-  };
-
-  const handlePrint = () => {
-    window.scrollTo(0, 0);
-    window.print();
   };
 
   const handleReadPage = async () => {
@@ -44,81 +17,66 @@ export const FloatingTools: React.FC = () => {
       return;
     }
 
-    let textToRead = '';
-
-    const contentElements = document.querySelectorAll('.markdown-body');
-    if (contentElements.length > 0) {
-      contentElements.forEach(el => {
-        textToRead += (el as HTMLElement).innerText + ' . ';
+    // استخراج النصوص من الرسائل فقط لضمان جودة المحتوى
+    const messageContainers = document.querySelectorAll('.chat-container .rounded-2xl.text-right');
+    let textToRead = "";
+    
+    if (messageContainers.length > 0) {
+      messageContainers.forEach((container) => {
+        // نأخذ النص فقط ونتجنب الأزرار أو الرموز
+        const paragraphs = container.querySelectorAll('p, li, td');
+        paragraphs.forEach(p => {
+          textToRead += (p as HTMLElement).innerText + " . ";
+        });
       });
     } else {
-      const headers = document.querySelectorAll('h1, h2, h3, p');
-      headers.forEach(el => {
-        textToRead += (el as HTMLElement).innerText + ' . ';
-      });
+      textToRead = "مرحباً بك في نظام المتفوق الذكي. ابدأ بسؤال المعلمة عن أي شيء في المنهج.";
     }
 
-    if (!textToRead.trim()) return;
+    if (textToRead.trim().length < 10) return;
 
-    setIsLoading(true);
     setIsSpeaking(true);
-    isSpeakingRef.current = true;
-
-    try {
-      const AudioContextClass =
-        window.AudioContext || (window as any).webkitAudioContext;
-
-      if (!audioContextRef.current) {
-        audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
-      }
-
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume();
-      }
-
-      setIsLoading(false);
-
-      await streamSpeech(textToRead, () => {
-        setIsSpeaking(false);
-        isSpeakingRef.current = false;
-      });
-    } catch (error) {
-      console.error('Read page error:', error);
-      stopAudio();
-    }
+    // تشغيل محرك النطق المتطور (Super-Teacher Engine)
+    await streamSpeech(textToRead, () => setIsSpeaking(false));
   };
 
   return (
-    <div className="fixed top-20 left-4 z-50 flex flex-col gap-3 no-print group">
-      <div className="absolute -top-8 left-0 bg-indigo-100 text-indigo-600 text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap font-bold shadow-sm">
-        أدوات الطالب
+    <div className="fixed top-24 left-4 z-[80] flex flex-col gap-4 no-print group">
+      <div className="flex flex-col gap-2 items-center">
+        <button
+          onClick={handleReadPage}
+          className={`group/btn relative p-4 rounded-2xl shadow-xl transition-all border-2 flex items-center justify-center hover:scale-110 active:scale-95 ${
+            isSpeaking 
+            ? 'bg-red-500 border-red-400 text-white animate-pulse' 
+            : 'bg-indigo-600 border-indigo-500 text-white shadow-indigo-200'
+          }`}
+          title={isSpeaking ? "إيقاف القراءة" : "قراءة الصفحة بالكامل بصوت المعلمة"}
+        >
+          {isSpeaking ? <VolumeX size={24} /> : <Volume2 size={24} />}
+          
+          {/* Tooltip */}
+          <span className="absolute right-full mr-4 px-3 py-1.5 bg-slate-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/btn:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+            {isSpeaking ? "إيقاف النطق" : "قراءة الصفحة (صوت معلمة)"}
+          </span>
+        </button>
+        
+        {isSpeaking && (
+          <div className="bg-white px-2 py-1 rounded-full shadow-sm border border-slate-100 flex items-center gap-1">
+             <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce"></div>
+             <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+          </div>
+        )}
       </div>
 
       <button
-        onClick={handleReadPage}
-        disabled={isLoading}
-        className={`p-3 rounded-full shadow-lg transition-all border-2 border-white hover:scale-105 flex items-center justify-center ${
-          isSpeaking
-            ? 'bg-red-500 text-white animate-pulse'
-            : 'bg-indigo-600 text-white hover:bg-indigo-700'
-        }`}
-        title={isSpeaking ? 'إيقاف القراءة' : 'قراءة الصفحة بالكامل'}
+        onClick={() => window.print()}
+        className="p-4 bg-white text-slate-700 rounded-2xl shadow-lg hover:bg-slate-50 transition-all border-2 border-slate-100 hover:scale-110 active:scale-95 group/print"
+        title="حفظ الصفحة كـ PDF"
       >
-        {isLoading ? (
-          <Loader2 size={20} className="animate-spin" />
-        ) : isSpeaking ? (
-          <VolumeX size={20} />
-        ) : (
-          <Volume2 size={20} />
-        )}
-      </button>
-
-      <button
-        onClick={handlePrint}
-        className="p-3 bg-slate-800 text-white rounded-full shadow-lg hover:bg-slate-900 transition-all border-2 border-white hover:scale-105"
-        title="طباعة / حفظ PDF"
-      >
-        <Printer size={20} />
+        <Printer size={24} />
+        <span className="absolute right-full mr-4 px-3 py-1.5 bg-slate-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/print:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          طباعة / حفظ PDF
+        </span>
       </button>
     </div>
   );
