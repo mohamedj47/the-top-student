@@ -116,14 +116,12 @@ export default function SmartTutorPage() {
           id: (Date.now() + 1).toString(),
           sender: Sender.BOT, 
           type: 'cached',
-          // Fix: fallback to explanation if answer is not provided (e.g. from localContentRepository)
-          text: (staticResult as any).answer || (staticResult as any).explanation,
+          text: staticResult.answer,
           timestamp: new Date(),
           metadata: {
             subject: staticResult.subject,
-            // Fix: safely handle optional difficulty and readingTime properties
-            difficulty: (staticResult as any).difficulty ? ((staticResult as any).difficulty === 'easy' ? 'سهل' : 'متوسط') : undefined,
-            readingTime: (staticResult as any).readingTime
+            difficulty: staticResult.difficulty === 'easy' ? 'سهل' : 'متوسط',
+            readingTime: staticResult.readingTime
           }
         }]);
         setIsLoading(false);
