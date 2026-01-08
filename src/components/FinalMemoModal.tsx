@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Printer, FileText, Loader2, ShieldCheck } from 'lucide-react';
+import { X, Printer, Download, FileText, Loader2, Sparkles, ShieldCheck } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { generateFinalMemo } from '../services/geminiService';
@@ -20,15 +20,10 @@ export const FinalMemoModal: React.FC<FinalMemoModalProps> = ({ isOpen, onClose,
   useEffect(() => {
     if (isOpen) {
       setIsLoading(true);
-      generateFinalMemo(subject, grade)
-        .then(content => {
-          setMemoContent(content);
-          setIsLoading(false);
-        })
-        .catch(() => {
-          setMemoContent("عذراً، حدث خطأ أثناء تجهيز المذكرة. يرجى المحاولة لاحقاً.");
-          setIsLoading(false);
-        });
+      generateFinalMemo(subject, grade).then(content => {
+        setMemoContent(content);
+        setIsLoading(false);
+      });
     }
   }, [isOpen, subject, grade]);
 
@@ -42,7 +37,7 @@ export const FinalMemoModal: React.FC<FinalMemoModalProps> = ({ isOpen, onClose,
     <div className="fixed inset-0 z-[150] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-0 md:p-6 no-print" dir="rtl">
       <div className="bg-white w-full max-w-5xl h-full md:h-[90vh] md:rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden border border-white/20">
         
-        {/* Header */}
+        {/* Header - Hidden on Print */}
         <div className="p-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-4">
             <div className="bg-amber-100 p-3 rounded-2xl text-amber-600 shadow-sm">
@@ -75,7 +70,8 @@ export const FinalMemoModal: React.FC<FinalMemoModalProps> = ({ isOpen, onClose,
                 <p className="font-black text-slate-800 text-lg animate-pulse">جاري تجهيز الخلاصة الذهبية للامتحان...</p>
             </div>
           ) : (
-            <div id="memo-to-print" className="max-w-4xl mx-auto bg-white shadow-xl rounded-[2rem] p-8 md:p-16 border border-slate-100 relative">
+            <div id="memo-to-print" className="max-w-4xl mx-auto bg-white shadow-xl rounded-[2rem] p-8 md:p-16 border border-slate-100 relative memo-print-container">
+                {/* Watermark for branding */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none select-none rotate-[-35deg]">
                     <span className="text-8xl font-black text-slate-900">المعلم الذكي</span>
                 </div>
@@ -91,7 +87,7 @@ export const FinalMemoModal: React.FC<FinalMemoModalProps> = ({ isOpen, onClose,
                     </div>
                 </div>
 
-                <div className="prose prose-slate prose-lg max-w-none font-bold text-slate-800 leading-relaxed text-right" dir="rtl">
+                <div className="prose prose-slate prose-lg max-w-none font-bold text-slate-800 leading-relaxed printable-content text-right" dir="rtl">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{memoContent}</ReactMarkdown>
                 </div>
 
@@ -103,6 +99,7 @@ export const FinalMemoModal: React.FC<FinalMemoModalProps> = ({ isOpen, onClose,
           )}
         </div>
       </div>
+
       <style>{`
         @media print {
             body * { visibility: hidden !important; }
@@ -122,7 +119,10 @@ export const FinalMemoModal: React.FC<FinalMemoModalProps> = ({ isOpen, onClose,
                 border: none !important;
                 background: white !important;
             }
-            @page { size: A4; margin: 0; }
+            @page {
+                size: A4;
+                margin: 0;
+            }
         }
       `}</style>
     </div>
