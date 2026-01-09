@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { GradeLevel, Subject } from './types';
 import { SubjectGrid } from './components/SubjectGrid';
@@ -17,7 +16,7 @@ import { isGradeActivated, getTrialStatus } from './utils/apiKeyManager';
 import { isSupabaseConfigured } from './lib/supabase';
 import { DynamicQuestionBank } from './lib/dynamicBank';
 
-// مكون فرعي للأيقونات في القائمة السفلية
+// NavItem component for the bottom navigation
 const NavItem = ({ icon: Icon, label, active, onClick }: { icon: any, label: string, active: boolean, onClick: () => void }) => (
   <button onClick={onClick} className="flex flex-col items-center gap-1.5 group relative">
     <div className={`p-2.5 rounded-2xl transition-all duration-300 ${active ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200 scale-125 -translate-y-2' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}>
@@ -59,9 +58,11 @@ export default function App() {
     checkHash();
     window.addEventListener('hashchange', checkHash);
 
-    // تفعيل المزامنة السحابية عند بدء التطبيق
+    // Initial cloud sync
     if (isSupabaseConfigured()) {
-        DynamicQuestionBank.syncWithCloud().then(() => setIsCloudSynced(true)).catch(() => setIsCloudSynced(false));
+        DynamicQuestionBank.syncWithCloud()
+          .then(() => setIsCloudSynced(true))
+          .catch(() => setIsCloudSynced(false));
     }
 
     return () => clearInterval(interval);
