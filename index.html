@@ -1,72 +1,75 @@
 
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>المعلم الذكي - رحلة التفوق</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>الطالب المتفوق - المعلم الذكي</title>
+    
+    <!-- PWA Settings -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#4f46e5" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3413/3413535.png" />
+
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-      :root { 
-        --font-main: 'Almarai', sans-serif;
-        --font-header: 'Cairo', sans-serif;
-      }
+      :root { --font-main: 'Cairo', sans-serif; }
       body {
         font-family: var(--font-main);
-        background-color: #f8fafc;
-        color: #1e293b;
-        user-select: none;
+        background-color: #f1f5f9;
+        margin: 0;
+        overflow-x: hidden;
         -webkit-tap-highlight-color: transparent;
-      }
-      h1, h2, h3, .font-header { font-family: var(--font-header); }
-      
-      .prose {
-        line-height: 2 !important;
-        font-size: 1.2rem !important;
-        font-weight: 700;
-      }
-      
-      .interactive-prose p, .interactive-prose li {
-        padding: 4px 8px;
-        transition: all 0.2s;
-        border-radius: 8px;
-      }
-      .interactive-prose p:hover, .interactive-prose li:hover {
-        background-color: rgba(79, 70, 229, 0.08);
-        cursor: pointer;
-        transform: translateX(-5px);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
       }
       
       ::-webkit-scrollbar { width: 0px; background: transparent; }
       
+      .safe-top { padding-top: env(safe-area-inset-top); }
+      .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
       @media print {
         .no-print { display: none !important; }
-        body { background: white; }
+      }
+
+      @keyframes app-entry {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-app { animation: app-entry 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+
+      p, span, h1, h2, h3, h4, button, input, textarea {
+        line-height: 1.6 !important;
+        letter-spacing: 0 !important;
       }
     </style>
   <script type="importmap">
 {
   "imports": {
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.90.0",
-    "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
     "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
     "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
     "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
-    "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
     "remark-gfm": "https://esm.sh/remark-gfm@^4.0.1",
-    "@vercel/node": "https://esm.sh/@vercel/node@^5.5.16"
+    "vite": "https://esm.sh/vite@^7.3.0",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "@vercel/node": "https://esm.sh/@vercel/node@^5.5.16",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.48.1"
   }
 }
 </script>
 </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/main.tsx"></script>
   </body>
 </html>
