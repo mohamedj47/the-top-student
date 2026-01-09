@@ -6,7 +6,7 @@ export interface StaticContent {
   subject: Subject;
   grade: GradeLevel;
   language: StudyLanguage;
-  explanation: string; 
+  explanation: string;
   summary: string;
   practice: string;
   keyPoints: string;
@@ -14,108 +14,104 @@ export interface StaticContent {
 
 /**
  * المستودع المعرفي الذهبي الشامل (Global Offline Repository)
- * يحتوي على ملخصات الدروس الأساسية لجميع اللغات والصفوف لضمان العمل بدون إنترنت
+ * تم ملؤه بالمادة العلمية الكاملة لأهم دروس المنهج المصري 2026
  */
 export const localContentRepository: StaticContent[] = [
-  // ================= ENGLISH (Language Schools) =================
+  // ================= PHYSICS - GRADE 12 =================
   {
-    topic: "Organic Chemistry",
-    subject: Subject.CHEMISTRY,
-    grade: GradeLevel.GRADE_12,
-    language: StudyLanguage.ENGLISH,
-    explanation: `### Organic Chemistry: Alkanes, Alkenes, and Alkynes
-- **Alkanes (CnH2n+2):** Saturated hydrocarbons, single bonds only. (e.g., Methane CH4).
-- **Alkenes (CnH2n):** Unsaturated, at least one double bond. (e.g., Ethene C2H4).
-- **Alkynes (CnH2n-2):** Unsaturated, at least one triple bond. (e.g., Ethyne C2H2).`,
-    summary: `Identify by bonds: Single = -ane, Double = -ene, Triple = -yne.`,
-    practice: `Formula for Propane? (C3H8).`,
-    keyPoints: "Carbon always forms 4 bonds."
-  },
-  {
-    topic: "Ohm's Law",
+    topic: "قانون أوم والدوائر الكهربائية",
     subject: Subject.PHYSICS,
     grade: GradeLevel.GRADE_12,
-    language: StudyLanguage.ENGLISH,
-    explanation: `### Ohm's Law & Electric Circuits
-**Formula:** V = I × R
-- **V (Voltage):** Measured in Volts (V).
-- **I (Current):** Measured in Amperes (A).
-- **R (Resistance):** Measured in Ohms (Ω).`,
-    summary: `V = IR. To increase current, increase voltage or decrease resistance.`,
-    practice: `If V=10V and R=2Ω, I = ? (Ans: 5A).`,
-    keyPoints: "Ohmic conductors have constant resistance at constant temperature."
+    language: StudyLanguage.ARABIC,
+    explanation: `### تحضير درس: قانون أوم والدوائر الكهربائية
+**1. نواتج التعلم:**
+- يستنتج العلاقة بين فرق الجهد وشدة التيار.
+- يطبق قانون أوم في حل المسائل المعقدة.
+
+**2. عرض المادة العلمية:**
+- **قانون أوم:** تتناسب شدة التيار (I) المار في موصل تناسباً طردياً مع فرق الجهد (V) بين طرفيه عند ثبوت درجة الحرارة.
+- **الصيغة الرياضية:** V = I × R
+- **المقاومة الكهربية (R):** هي الممانعة التي يلقاها التيار الكهربي أثناء مروره في الموصل.
+
+**3. أنشطة تفاعلية:**
+- تجربة افتراضية باستخدام برنامج Phet لمحاكاة الدوائر الكهربية وتغيير قيمة المقاومة وملاحظة التيار.`,
+    summary: `V=IR، العلاقة طردية بين V و I.`,
+    practice: `دائرة بها بطارية 12 فولت ومقاومة 3 أوم، احسب التيار.`,
+    keyPoints: "ثبوت درجة الحرارة شرط أساسي لقانون أوم."
   },
   {
-    topic: "DNA Structure",
+    topic: "التأثير المغناطيسي للتيار الكهربي",
+    subject: Subject.PHYSICS,
+    grade: GradeLevel.GRADE_12,
+    language: StudyLanguage.ARABIC,
+    explanation: `### تحضير درس: التأثير المغناطيسي للتيار الكهربي
+- **سلك مستقيم:** B = (μ I) / (2π d).
+- **ملف دائري:** B = (μ N I) / (2 r).
+- **ملف حلزوني:** B = μ n I.
+- **قاعدة اليد اليمنى لأمبير:** تستخدم لتحديد اتجاه المجال المغناطيسي.`,
+    summary: `التيار يولد مجالاً مغناطيسياً يعتمد على شكل الموصل.`,
+    practice: `احسب كثافة الفيض عند نقطة تبعد 10 سم من سلك يمر به 5 أمبير.`,
+    keyPoints: "النفاذية المغناطيسية للهواء ثابتة (4π × 10^-7)."
+  },
+
+  // ================= CHEMISTRY - GRADE 12 =================
+  {
+    topic: "الكيمياء العضوية - الألكانات",
+    subject: Subject.CHEMISTRY,
+    grade: GradeLevel.GRADE_12,
+    language: StudyLanguage.ARABIC,
+    explanation: `### تحضير درس: الهيدروكربونات المشبعة (الألكانات)
+**1. نواتج التعلم:**
+- يتعرف على السلسلة المتجانسة للألكانات.
+- يتقن تسمية الألكانات حسب نظام IUPAC.
+
+**2. عرض الدرس:**
+- الصيغة العامة: CnH2n+2.
+- أول أفرادها: الميثان CH4.
+- الرابطة: أحادية من النوع سيجما (σ) القوية صعبة الكسر.
+- **التسمية:** اختيار أطول سلسلة كربونية، الترقيم من الطرف الأقرب للتفرع.`,
+    summary: `روابط أحادية، خاملة كيميائياً نسبياً، تشتعل وتعطي CO2 وبخار ماء.`,
+    practice: `اكتب الصيغة البنائية لـ 2-ميثيل بيوتان.`,
+    keyPoints: "الألكانات تسمى أيضاً برافينات."
+  },
+
+  // ================= BIOLOGY - GRADE 12 =================
+  {
+    topic: "الدعامة في الكائنات الحية",
     subject: Subject.BIOLOGY,
     grade: GradeLevel.GRADE_12,
-    language: StudyLanguage.ENGLISH,
-    explanation: `### DNA: The Genetic Material
-DNA consists of two strands forming a double helix.
-- **Nucleotides:** Sugar, Phosphate, and a Nitrogenous Base.
-- **Base Pairs:** Adenine (A) pairs with Thymine (T), Guanine (G) pairs with Cytosine (C).`,
-    summary: `A=T (2 bonds), G≡C (3 bonds).`,
-    practice: `If Adenine is 20%, what is Cytosine? (Ans: 30%).`,
-    keyPoints: "DNA replication is semi-conservative."
+    language: StudyLanguage.ARABIC,
+    explanation: `### تحضير درس: الدعامة الفسيولوجية والتركيبية
+**1. الدعامة الفسيولوجية:**
+- دعامة مؤقتة تتناول الخلية نفسها ككل.
+- تعتمد على الخاصية الأسموزية ودخول الماء للفجوة العصرية.
+
+**2. الدعامة التركيبية:**
+- دعامة دائمة تتناول جدر الخلايا.
+- ترسيب مواد صلبة مثل (السيليلوز، اللجنين، الكيوتين، السيوبرين).
+
+**3. الجهاز الهيكلي في الإنسان:**
+- يتكون من 206 عظمة.
+- ينقسم إلى هيكل محوري (جمجمة، عمود فقري، قفص صدري) وهيكل طرفي.`,
+    summary: `الفسيولوجية (ماء/مؤقتة)، التركيبية (ترسيب/دائمة).`,
+    practice: `ماذا يحدث عند وضع ثمرة فاكهة منكمشة في الماء؟`,
+    keyPoints: "العمود الفقري هو محور الهيكل العظمي."
   },
 
-  // ================= FRENCH (Écoles de Langues) =================
+  // ================= GEOLOGY - GRADE 12 =================
   {
-    topic: "Chimie Organique",
-    subject: Subject.CHEMISTRY,
-    grade: GradeLevel.GRADE_12,
-    language: StudyLanguage.FRENCH,
-    explanation: `### Chimie Organique: Alcanes, Alcènes et Alcynes
-- **Alcanes (CnH2n+2):** Hydrocarbures saturés (ex: Méthane CH4).
-- **Alcènes (CnH2n):** Insaturés avec double liaison (ex: Éthène C2H4).
-- **Alcynes (CnH2n-2):** Insaturés avec triple liaison.`,
-    summary: `Alcane = Simple, Alcène = Double, Alcyne = Triple.`,
-    practice: `Formule du Butane? (C4H10).`,
-    keyPoints: "Le carbone est tétravalent."
-  },
-
-  // ================= GERMAN (Sprachschulen) =================
-  {
-    topic: "Ohmsches Gesetz",
-    subject: Subject.PHYSICS,
-    grade: GradeLevel.GRADE_12,
-    language: StudyLanguage.GERMAN,
-    explanation: `### Ohmsches Gesetz (U = R * I)
-- **U:** Elektrische Spannung (Volt).
-- **I:** Elektrische Stromstärke (Ampere).
-- **R:** Elektrischer Widerstand (Ohm).`,
-    summary: `U = R * I ist die Grundformel der Elektrotechnik.`,
-    practice: `U=12V, R=4 Ohm -> I=? (Antwort: 3A).`,
-    keyPoints: "Widerstand ist Materialabhängig."
-  },
-
-  // ================= ARABIC (المحتوى العربي الأصلي) =================
-  {
-    topic: "الكيمياء العضوية",
-    subject: Subject.CHEMISTRY,
+    topic: "مكونات كوكب الأرض",
+    subject: Subject.GEOLOGY,
     grade: GradeLevel.GRADE_12,
     language: StudyLanguage.ARABIC,
-    explanation: `### الكيمياء العضوية: الألكانات والألكينات والألكاينات
-- **الألكانات (CnH2n+2):** هيدروكربونات مشبعة، روابط أحادية فقط (مثل الميثان CH4).
-- **الألكينات (CnH2n):** غير مشبعة، تحتوي على رابطة مزدوجة (مثل الإيثين C2H4).
-- **الألكاينات (CnH2n-2):** غير مشبعة، تحتوي على رابطة ثلاثية (مثل الإيثاين C2H2).`,
-    summary: `أحادية = ألكان، ثنائية = ألكين، ثلاثية = ألكاين.`,
-    practice: `ما هي صيغة البروبان؟ (C3H8).`,
-    keyPoints: "ذرة الكربون رباعية التكافؤ دائماً."
-  },
-  {
-    topic: "قانون أوم",
-    subject: Subject.PHYSICS,
-    grade: GradeLevel.GRADE_12,
-    language: StudyLanguage.ARABIC,
-    explanation: `### قانون أوم والدوائر الكهربائية
-**الصيغة:** V = I × R
-- **V (فرق الجهد):** بالفولت.
-- **I (شدة التيار):** بالأمبير.
-- **R (المقاومة):** بالأوم.`,
-    summary: `العلاقة طردية بين الجهد والتيار عند ثبوت المقاومة.`,
-    practice: `إذا كان الجهد 20 فولت والمقاومة 5 أوم، احسب التيار. (الإجابة: 4 أمبير).`,
-    keyPoints: "تزداد المقاومة بزيادة طول السلك ونقص مساحة مقطعه."
+    explanation: `### تحضير درس: مكونات كوكب الأرض
+- **القشرة الأرضية:** قارية (سيال) ومحيطية (سيما).
+- **الوشاح:** يمثل 80% من حجم صخور الأرض، الجزء العلوي منه (الأسينوسفير) لدن مائع.
+- **اللب:** خارجي (مصهور) وداخلي (صلب)، مسؤول عن المجال المغناطيسي.
+- **الغلاف الجوي والمائي والحيوي.**`,
+    summary: `قشرة، وشاح، لب، أغلفة حيوية ومائية وجوية.`,
+    practice: `قارن بين اللب الداخلي والخارجي من حيث الحالة الفيزيائية.`,
+    keyPoints: "الأسينوسفير يسمح بانتشار دوامات تيارات الحمل."
   }
 ];
 
