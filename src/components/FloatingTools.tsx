@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
 import { Printer, Volume2, VolumeX, Loader2, Play, Info } from 'lucide-react';
-import { streamSpeech } from '../services/geminiService';
+// Fix: Use exported 'speakLongTextGemini' instead of non-existent 'streamSpeech'
+import { speakLongTextGemini } from '../services/geminiService';
 
 export const FloatingTools: React.FC = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -37,7 +38,8 @@ export const FloatingTools: React.FC = () => {
 
     setIsSpeaking(true);
     // تشغيل محرك النطق المتطور (Super-Teacher Engine)
-    await streamSpeech(textToRead, () => setIsSpeaking(false));
+    // Fix: Updated call to 'speakLongTextGemini' with correct parameter structure
+    await speakLongTextGemini(textToRead, undefined, () => setIsSpeaking(false));
   };
 
   return (
