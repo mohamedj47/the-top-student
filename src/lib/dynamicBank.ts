@@ -1,5 +1,5 @@
 
-import { Subject, GradeLevel } from '../types';
+import { Subject, GradeLevel } from './types';
 import { supabase, isSupabaseConfigured } from './supabase';
 
 export const ACTIVATION_SALT = "SMART_EDU_EGYPT_2026";
