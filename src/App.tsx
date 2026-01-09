@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { GradeLevel, Subject } from './types';
 import { SubjectGrid } from './components/SubjectGrid';
@@ -8,15 +9,15 @@ import { TutorialModal } from './components/TutorialModal';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TeacherPreparation } from './components/TeacherPreparation';
 import { 
-  Home, Star, LayoutDashboard, User, Settings, Bell, Zap, Trophy,
-  BrainCircuit, Database, GraduationCap, Clock, ShieldCheck, Hourglass, Lock, Presentation,
-  Cloud, CloudOff, RefreshCw
+  Home, Star, LayoutDashboard, User, Bell, Zap, 
+  GraduationCap, ShieldCheck, Hourglass, Lock, Presentation,
+  Cloud, RefreshCw, Database
 } from 'lucide-react';
 import { isGradeActivated, getTrialStatus } from './utils/apiKeyManager';
 import { isSupabaseConfigured } from './lib/supabase';
 import { DynamicQuestionBank } from './lib/dynamicBank';
 
-// NavItem component for the bottom navigation
+// مكون التنقل السفلي
 const NavItem = ({ icon: Icon, label, active, onClick }: { icon: any, label: string, active: boolean, onClick: () => void }) => (
   <button onClick={onClick} className="flex flex-col items-center gap-1.5 group relative">
     <div className={`p-2.5 rounded-2xl transition-all duration-300 ${active ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200 scale-125 -translate-y-2' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}>
@@ -26,7 +27,7 @@ const NavItem = ({ icon: Icon, label, active, onClick }: { icon: any, label: str
   </button>
 );
 
-export default function App() {
+const App = () => {
   const [grade, setGrade] = useState<GradeLevel | null>(null);
   const [subject, setSubject] = useState<Subject | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -58,7 +59,7 @@ export default function App() {
     checkHash();
     window.addEventListener('hashchange', checkHash);
 
-    // Initial cloud sync
+    // المزامنة السحابية
     if (isSupabaseConfigured()) {
         DynamicQuestionBank.syncWithCloud()
           .then(() => setIsCloudSynced(true))
@@ -193,10 +194,13 @@ export default function App() {
 
       <nav className="fixed bottom-0 inset-x-0 bg-white/80 backdrop-blur-2xl border-t border-slate-200 px-8 py-5 flex justify-between items-center shadow-[0_-15px_40px_rgba(0,0,0,0.05)] safe-bottom z-50 rounded-t-[3rem]">
           <NavItem icon={Home} label="الرئيسية" active={activeTab === 'home'} onClick={() => setActiveTab('home')} />
+          {/* Fix: Added missing 'Database' icon import to lucide-react in App.tsx */}
           <NavItem icon={Database} label="بنك الطالب" active={activeTab === 'bank'} onClick={() => setActiveTab('bank')} />
           <NavItem icon={Presentation} label="ركن المعلم" active={activeTab === 'teacher'} onClick={() => { setActiveTab('teacher'); setIsTeacherHubOpen(true); }} />
           <NavItem icon={User} label="حسابي" active={activeTab === 'more'} onClick={() => setActiveTab('more')} />
       </nav>
     </div>
   );
-}
+};
+
+export default App;
