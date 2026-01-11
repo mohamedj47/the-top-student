@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Mic, MicOff, PhoneOff, Loader2, Activity } from 'lucide-react';
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
@@ -25,6 +24,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose,
   const sessionRef = useRef<any>(null);
   const nextStartTimeRef = useRef<number>(0);
   const mountedRef = useRef(true);
+  const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
 
   const cleanup = useCallback(async () => {
     if (sessionRef.current) {
@@ -35,6 +35,10 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose,
       mediaStreamRef.current.getTracks().forEach(track => track.stop());
       mediaStreamRef.current = null;
     }
+    
+    sourcesRef.current.forEach(s => { try { s.stop(); } catch(e) {} });
+    sourcesRef.current.clear();
+
     if (processorRef.current) { processorRef.current.disconnect(); processorRef.current = null; }
     if (sourceRef.current) { sourceRef.current.disconnect(); sourceRef.current = null; }
     
@@ -48,28 +52,42 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose,
     }
   }, []);
 
-  const encodeAudio = (inputData: Float32Array) => {
-    const l = inputData.length;
-    const int16 = new Int16Array(l);
-    for (let i = 0; i < l; i++) {
-      const s = Math.max(-1, Math.min(1, inputData[i]));
-      int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  const decode = (base64: string) => {
+    const binaryString = atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
     }
+    return bytes;
+  };
+
+  const encode = (bytes: Uint8Array) => {
     let binary = '';
-    const bytes = new Uint8Array(int16.buffer);
-    for (let i = 0; i < bytes.byteLength; i++) { binary += String.fromCharCode(bytes[i]); }
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
     return btoa(binary);
   };
 
-  const decodeAudioData = (base64String: string) => {
-    const binary = atob(base64String);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) { bytes[i] = binary.charCodeAt(i); }
-    const int16 = new Int16Array(bytes.buffer);
-    const float32 = new Float32Array(int16.length);
-    for (let i = 0; i < int16.length; i++) { float32[i] = int16[i] / 32768.0; }
-    return float32;
-  };
+  async function decodeAudioData(
+    data: Uint8Array,
+    ctx: AudioContext,
+    sampleRate: number,
+    numChannels: number,
+  ): Promise<AudioBuffer> {
+    const dataInt16 = new Int16Array(data.buffer);
+    const frameCount = dataInt16.length / numChannels;
+    const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+    for (let channel = 0; channel < numChannels; channel++) {
+      const channelData = buffer.getChannelData(channel);
+      for (let i = 0; i < frameCount; i++) {
+        channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      }
+    }
+    return buffer;
+  }
 
   const connect = useCallback(async (currentRetry = 0) => {
     const currentApiKey = getApiKey();
@@ -86,7 +104,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose,
       const systemInstruction = `أنت "المعلم الذكي" لصف ${grade} مادة ${subject}. أجب بلهجة مصرية قصيرة ومباشرة. لا تزد عن جملتين.`;
 
       const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
@@ -101,32 +119,47 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose,
             const source = inputCtx.createMediaStreamSource(stream);
             const processor = inputCtx.createScriptProcessor(4096, 1, 1);
             processor.onaudioprocess = (e) => {
-              if (isMuted) return;
               const inputData = e.inputBuffer.getChannelData(0);
-              const base64Data = encodeAudio(inputData);
-              sessionPromise.then(session => session.sendRealtimeInput({ media: { mimeType: 'audio/pcm;rate=16000', data: base64Data } }));
+              const int16 = new Int16Array(inputData.length);
+              for (let i = 0; i < inputData.length; i++) {
+                int16[i] = inputData[i] * 32768;
+              }
+              const base64Data = encode(new Uint8Array(int16.buffer));
+              sessionPromise.then(session => {
+                if (!isMuted) {
+                  session.sendRealtimeInput({ media: { mimeType: 'audio/pcm;rate=16000', data: base64Data } });
+                }
+              });
             };
             source.connect(processor);
             processor.connect(inputCtx.destination);
             sourceRef.current = source;
             processorRef.current = processor;
           },
-          onmessage: (msg: LiveServerMessage) => {
+          onmessage: async (message: LiveServerMessage) => {
              if (!mountedRef.current) return;
-             const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-             if (audioData && audioContextRef.current) {
-                const float32Data = decodeAudioData(audioData);
-                const buffer = audioContextRef.current.createBuffer(1, float32Data.length, 24000);
-                buffer.getChannelData(0).set(float32Data);
-                const source = audioContextRef.current.createBufferSource();
-                source.buffer = buffer;
-                source.connect(audioContextRef.current.destination);
-                const start = Math.max(audioContextRef.current.currentTime, nextStartTimeRef.current);
-                source.start(start);
-                nextStartTimeRef.current = start + buffer.duration;
-                setVolumeLevel(0.8);
+             
+             if (message.serverContent?.interrupted) {
+                sourcesRef.current.forEach(s => { try { s.stop(); } catch(e) {} });
+                sourcesRef.current.clear();
+                nextStartTimeRef.current = 0;
+                return;
              }
-             setTimeout(() => setVolumeLevel(0), 300);
+
+             const base64Audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+             if (base64Audio && audioContextRef.current) {
+                nextStartTimeRef.current = Math.max(nextStartTimeRef.current, audioContextRef.current.currentTime);
+                const audioBuffer = await decodeAudioData(decode(base64Audio), audioContextRef.current, 24000, 1);
+                const source = audioContextRef.current.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContextRef.current.destination);
+                source.onended = () => { sourcesRef.current.delete(source); };
+                source.start(nextStartTimeRef.current);
+                nextStartTimeRef.current += audioBuffer.duration;
+                sourcesRef.current.add(source);
+                setVolumeLevel(0.8);
+                setTimeout(() => setVolumeLevel(0), 300);
+             }
           },
           onclose: () => { if (mountedRef.current) onClose(); },
           onerror: (err: any) => { 
