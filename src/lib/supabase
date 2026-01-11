@@ -1,12 +1,17 @@
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// ملاحظة: يتم جلب هذه المتغيرات من ملف .env أو إعدادات Vercel
-const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
+let supabase: SupabaseClient | null = null;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const isSupabaseConfigured = () => {
-  return supabaseUrl.length > 0 && supabaseAnonKey.length > 0;
-};
+if (supabaseUrl && supabaseAnonKey) {
+  supabase = createClient(supabaseUrl, supabaseAnonKey);
+}
+
+export { supabase };
+
+export function isSupabaseConfigured() {
+  return supabase !== null;
+}
