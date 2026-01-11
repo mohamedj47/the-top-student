@@ -1,36 +1,30 @@
 import { createClient } from '@supabase/supabase-js';
 
-/**
- * محرك الربط مع Supabase
- * يتم استخراج القيم من process.env التي يتم حقنها بواسطة Vite
- */
-// Fix: Use the correct environment variable names as defined in vite.config.ts
-const supabaseUrl = (typeof process !== 'undefined' && (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)) || '';
-const supabaseAnonKey = (typeof process !== 'undefined' && (process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)) || '';
+// Access variables safely from define-injected process.env
+const getEnvVar = (name: string) => {
+  try {
+    return (typeof process !== 'undefined' && process.env) ? process.env[name] : '';
+  } catch {
+    return '';
+  }
+};
 
-// نقوم بإزالة annotation النوع هنا لتجنب أخطاء Rollup في بعض بيئات البناء
-// التي قد تعامل الملف كملف JavaScript عادي بالخطأ
+const supabaseUrl = getEnvVar('SUPABASE_URL') || getEnvVar('NEXT_PUBLIC_SUPABASE_URL') || '';
+const supabaseAnonKey = getEnvVar('SUPABASE_ANON_KEY') || getEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY') || '';
+
 export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
-/**
- * فحص ما إذا كان العميل قد تم إنشاؤه بنجاح
- */
-export const isSupabaseConnected = () => {
-  return !!supabase;
-};
+export const isSupabaseConnected = () => !!supabase;
 
-/**
- * جلب حالة الإعدادات الحالية للواجهة الأمامية
- */
 export const getSupabaseStatus = () => {
-  // Fix: Add missing properties isKeyFormatCorrect and isStripeKeyDetected which are used in ChatInterface.tsx
+  const key = supabaseAnonKey || '';
   return {
     hasUrl: !!supabaseUrl,
-    hasKey: !!supabaseAnonKey,
+    hasKey: !!key,
     isConnected: !!supabase,
-    isKeyFormatCorrect: supabaseAnonKey.startsWith('eyJ'),
-    isStripeKeyDetected: supabaseAnonKey.startsWith('sk_') || supabaseAnonKey.startsWith('pk_') || supabaseAnonKey.startsWith('sb_')
+    isKeyFormatCorrect: key.startsWith('eyJ'),
+    isStripeKeyDetected: key.startsWith('sk_') || key.startsWith('pk_') || key.startsWith('sb_')
   };
 };
