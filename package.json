@@ -5,23 +5,20 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host",
+    "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0 || true",
-    "format": "prettier --write .",
-    "start": "vite" 
+    "preview": "vite preview"
   },
   "dependencies": {
     "@google/genai": "latest",
-    "@supabase/supabase-js": "^2.48.1",
+    "@supabase/supabase-js": "2.39.7",
     "lucide-react": "latest",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-markdown": "^9.0.0",
     "recharts": "^2.10.0",
-    "remark-gfm": "^4.0.0",
-    "axios": "^1.5.0"
+    "remark-gfm": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -37,40 +34,6 @@
     "postcss": "^8.4.27",
     "tailwindcss": "^3.3.3",
     "typescript": "^5.0.2",
-    "vite": "^4.4.5",
-    "prettier": "^3.0.0"
-  },
-  "eslintConfig": {
-    "root": true,
-    "extends": [
-      "eslint:recommended",
-      "plugin:react/recommended",
-      "plugin:@typescript-eslint/recommended"
-    ],
-    "parser": "@typescript-eslint/parser",
-    "plugins": ["react", "@typescript-eslint", "react-hooks"],
-    "env": {
-      "browser": true,
-      "es2021": true,
-      "node": true
-    },
-    "settings": {
-      "react": {
-        "version": "detect"
-      }
-    },
-    "rules": {
-      "react/react-in-jsx-scope": "off",
-      "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-      "react-hooks/rules-of-hooks": "error",
-      "react-hooks/exhaustive-deps": "warn"
-    }
-  },
-  "prettier": {
-    "semi": true,
-    "singleQuote": true,
-    "trailingComma": "all",
-    "printWidth": 100,
-    "tabWidth": 2
+    "vite": "^4.4.5"
   }
 }
