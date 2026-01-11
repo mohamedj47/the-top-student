@@ -1,30 +1,34 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Access variables safely from define-injected process.env
-const getEnvVar = (name: string) => {
-  try {
-    return (typeof process !== 'undefined' && process.env) ? process.env[name] : '';
-  } catch {
-    return '';
+/**
+ * محرك الربط مع Supabase
+ * يتم استخراج القيم من process.env التي يتم حقنها بواسطة Vite
+ */
+const getEnv = (key) => {
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key];
   }
+  return '';
 };
 
-const supabaseUrl = getEnvVar('SUPABASE_URL') || getEnvVar('NEXT_PUBLIC_SUPABASE_URL') || '';
-const supabaseAnonKey = getEnvVar('SUPABASE_ANON_KEY') || getEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY') || '';
+const supabaseUrl = getEnv('SUPABASE_URL') || getEnv('NEXT_PUBLIC_SUPABASE_URL');
+const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY') || getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
 export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
-export const isSupabaseConnected = () => !!supabase;
+export const isSupabaseConnected = () => {
+  return !!supabase;
+};
 
 export const getSupabaseStatus = () => {
-  const key = supabaseAnonKey || '';
+  const keyStr = supabaseAnonKey || '';
   return {
     hasUrl: !!supabaseUrl,
-    hasKey: !!key,
+    hasKey: !!keyStr,
     isConnected: !!supabase,
-    isKeyFormatCorrect: key.startsWith('eyJ'),
-    isStripeKeyDetected: key.startsWith('sk_') || key.startsWith('pk_') || key.startsWith('sb_')
+    isKeyFormatCorrect: keyStr.startsWith('eyJ'),
+    isStripeKeyDetected: keyStr.startsWith('sk_') || keyStr.startsWith('pk_') || keyStr.startsWith('sb_')
   };
 };
