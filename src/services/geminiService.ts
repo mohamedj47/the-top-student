@@ -1,10 +1,9 @@
-
 import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender, StudyLanguage } from "../types";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { questionsBank, StaticQuestion } from "../lib/questionsBank";
 import { DynamicQuestionBank } from "../lib/dynamicBank";
 import { markKeyAsFailed, getAvailableKeys } from "../utils/apiKeyManager";
-import { getCurriculumStringForAI } from "../components/data/curriculum";
+import { getCurriculumStringForAI } from "../components/data/curriculum.ts";
 
 export function cleanMathNotation(text: string): string {
   if (!text) return "";
@@ -64,9 +63,6 @@ export async function decodePcmAudio(
   return buffer;
 }
 
-/**
- * دالة توليد صوت البودكاست مع نظام "صفر فشل"
- */
 export async function generatePodcastAudio(topic: string, content: string): Promise<string | null> {
   const availableKeys = getAvailableKeys();
   if (availableKeys.length === 0) return null;
