@@ -1,20 +1,24 @@
 import { createClient } from '@supabase/supabase-js';
 
-/**
- * محرك الربط مع Supabase
- * يتم استخراج القيم من process.env التي يتم حقنها بواسطة Vite
- */
-const getEnv = (key) => {
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env[key] || '';
+const getEnv = (key: string): string => {
+  // Try import.meta.env first (Vite standard)
+  const meta = import.meta as any;
+  if (typeof meta !== 'undefined' && meta.env) {
+    const val = meta.env[key] || meta.env[`VITE_${key}`];
+    if (val) return val;
   }
+  
+  // Fallback to process.env (Node/Vercel standard)
+  if (typeof process !== 'undefined' && process.env) {
+    return (process.env as any)[key] || '';
+  }
+  
   return '';
 };
 
 const supabaseUrl = getEnv('SUPABASE_URL') || getEnv('NEXT_PUBLIC_SUPABASE_URL');
 const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY') || getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
-// التحقق من القيم قبل محاولة إنشاء العميل لتجنب أخطاء التوقف
 export const supabase = (supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http'))
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
