@@ -3,7 +3,7 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import { questionsBank, StaticQuestion } from "../lib/questionsBank";
 import { DynamicQuestionBank } from "../lib/dynamicBank";
 import { markKeyAsFailed, getAvailableKeys } from "../utils/apiKeyManager";
-import { getCurriculumStringForAI } from "../components/data/curriculum.ts";
+import { getCurriculumStringForAI } from "../components/data/curriculum";
 
 export function cleanMathNotation(text: string): string {
   if (!text) return "";
@@ -24,6 +24,73 @@ export function sanitizeForSpeech(text: string): string {
     .replace(/- /g, ' ')       
     .replace(/\n/g, ' ')       
     .trim();
+}
+
+/**
+ * توليد نص حوار البودكاست عبر AI لضمان جودة تربوية عالية
+ */
+export async function generateDialogueTranscript(subject: string, content: string): Promise<string | null> {
+  const availableKeys = getAvailableKeys();
+  for (const apiKey of availableKeys) {
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Convert this educational content into a line-by-line Egyptian Arabic Teacher-Student dialogue. 
+        The Teacher explains every single detail, and the Student summarizes or asks for clarification. 
+        DO NOT SKIP ANY INFORMATION. Cover from start to end.
+        Format:
+        Teacher: [Text]
+        Student: [Text]
+        Content: ${content.substring(0, 3000)}`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: [{ role: 'user', parts: [{ text: prompt }] }]
+      });
+
+      return response.text || null;
+    } catch (e: any) {
+      if (e?.message?.includes('429')) markKeyAsFailed(apiKey);
+    }
+  }
+  return null;
+}
+
+/**
+ * توليد صوت البودكاست بناءً على حوار نصي جاهز
+ */
+export async function generatePodcastAudio(transcript: string): Promise<string | null> {
+  const availableKeys = getAvailableKeys();
+  if (availableKeys.length === 0) return null;
+
+  for (const apiKey of availableKeys) {
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: transcript.substring(0, 2000) }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            multiSpeakerVoiceConfig: {
+              speakerVoiceConfigs: [
+                { speaker: 'Teacher', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
+                { speaker: 'Student', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
+              ]
+            }
+          },
+        },
+      });
+
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+      return audioPart?.inlineData?.data || null;
+    } catch (e: any) {
+      if (e?.message?.includes('429')) {
+        markKeyAsFailed(apiKey);
+        continue;
+      }
+    }
+  }
+  return null;
 }
 
 export function searchInStaticBank(query: string): StaticQuestion | null {
@@ -61,50 +128,6 @@ export async function decodePcmAudio(
     }
   }
   return buffer;
-}
-
-export async function generatePodcastAudio(topic: string, content: string): Promise<string | null> {
-  const availableKeys = getAvailableKeys();
-  if (availableKeys.length === 0) return null;
-
-  for (const apiKey of availableKeys) {
-    try {
-      const ai = new GoogleGenAI({ apiKey });
-      const prompt = `Convert the following educational content into a FULL Egyptian Arabic Teacher-Student dialogue.
-        The dialogue MUST explain the content sentence by sentence from start to finish.
-        Content: ${content.substring(0, 1500)}
-        Format:
-        Teacher: [Explains segment]
-        Student: [Clarifies/Summarizes]
-        ... repeat until the end of content.
-        Output MUST be audio/pcm mode.`;
-
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: prompt }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            multiSpeakerVoiceConfig: {
-              speakerVoiceConfigs: [
-                { speaker: 'Teacher', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
-                { speaker: 'Student', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
-              ]
-            }
-          },
-        },
-      });
-
-      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-      if (audioPart?.inlineData?.data) return audioPart.inlineData.data;
-    } catch (e: any) {
-      if (e?.message?.includes('429')) {
-        markKeyAsFailed(apiKey);
-        continue;
-      }
-    }
-  }
-  return null;
 }
 
 export async function generateGeminiSpeech(text: string): Promise<string | null> {
