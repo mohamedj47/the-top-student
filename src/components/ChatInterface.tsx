@@ -1,18 +1,18 @@
 
 import React, { useState, useRef, useEffect, Suspense } from 'react';
-import { GradeLevel, Subject, Message, Sender, Attachment, GenerationOptions, StudyLanguage } from '../types';
-import { generateStreamResponse, generateTopicQuiz } from '../services/geminiService';
+import { GradeLevel, Subject, Message, Sender, Attachment, StudyLanguage } from '../types';
+import { generateStreamResponse } from '../services/geminiService';
 import { MessageBubble } from './MessageBubble';
 import { VideoResult } from '../data/videoData';
 import { LiveVoiceModal } from './LiveVoiceModal';
-import { DynamicQuestionBank } from '../lib/dynamicBank';
-import { KnowledgeNotebook } from './KnowledgeNotebook';
-import { FinalMemoModal } from './FinalMemoModal';
+import { PodcastModal } from './PodcastModal';
+import { StudentMemory } from '../lib/studentMemory';
 import { 
-  Send, ChevronRight, List, Bot, Loader2, BookText, 
-  Trophy, HelpCircle, Target, Mic, Camera, Paperclip, X, CheckCircle, GraduationCap,
-  Sparkles, FileText, FileSearch, Heart, Youtube, Database, History, Clock, Brain, BookOpen, Star, ShieldCheck, PenTool, Image as ImageIcon
+  Send, ChevronRight, List, Bot, Loader2, Mic, Camera, Paperclip, X, ShieldCheck, 
+  Sparkles, Star, Database, History, Clock, Brain, BookOpen, PenTool, Image as ImageIcon,
+  Printer, Smartphone, AlertTriangle, Key, Headphones
 } from 'lucide-react';
+import { isSystemOverloaded } from '../utils/apiKeyManager';
 
 const LessonBrowser = React.lazy(() => import('./LessonBrowser').then(module => ({ default: module.LessonBrowser })));
 const YouTubeModal = React.lazy(() => import('./YouTubeModal').then(module => ({ default: module.YouTubeModal })));
@@ -20,20 +20,18 @@ const YouTubeModal = React.lazy(() => import('./YouTubeModal').then(module => ({
 interface ChatInterfaceProps {
   grade: GradeLevel;
   subject: Subject;
-  studyLanguage?: StudyLanguage;
   onBack: () => void;
-  onSubscribe?: () => void;
 }
 
-export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, studyLanguage = StudyLanguage.ARABIC, onBack, onSubscribe }) => {
+export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, onBack }) => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isNotebookOpen, setIsNotebookOpen] = useState(false);
-  const [isFinalMemoOpen, setIsFinalMemoOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const [isLessonBrowserOpen, setIsLessonBrowserOpen] = useState(false);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [isPodcastOpen, setIsPodcastOpen] = useState(false);
   const [currentVideoData, setCurrentVideoData] = useState<VideoResult | null>(null);
   const [currentLessonTitle, setCurrentLessonTitle] = useState('');
   const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null);
@@ -44,27 +42,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    // تحميل الأرشيف المحفوظ لهذا الموضوع عند الفتح
-    const historyKey = `chat_history_${grade}_${subject}`;
-    const saved = localStorage.getItem(historyKey);
-    if (saved) {
-        try {
-            const parsed = JSON.parse(saved);
-            setMessages(parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
-        } catch(e) { console.error("History parse error", e); }
-    } else {
-        const welcomeText = `أهلاً بك يا بطل! أنا **المعلمة الذكية**. كل شروحاتي تُحفظ لك هنا أوفلاين تلقائياً.`;
-        setMessages([{ id: '1', text: welcomeText, sender: Sender.BOT, timestamp: new Date() }]);
-    }
-  }, [subject, grade]);
+    const welcome = `أهلاً بك يا بطل في مادة **${subject}**! 🚀\nأنا هنا لأشرح لك أي جزء صعب. يمكنك السؤال بالكتابة أو بالصوت أو حتى بتصوير السؤال.\n\n*(تلميح: اضغط على أي سطر في شرحي للاستفسار عنه)*`;
+    setMessages([{ id: '1', text: welcome, sender: Sender.BOT, timestamp: new Date() }]);
+    
+    // تحميل التاريخ المحلي (لغرض التأكد فقط - لا نغير UI)
+    StudentMemory.getHistory(subject).then(history => {
+       console.debug(`Loaded ${history.length} interactions for ${subject} from offline storage.`);
+    });
+  }, [subject]);
 
-  useEffect(() => {
-     if (messages.length > 1) {
-         const historyKey = `chat_history_${grade}_${subject}`;
-         localStorage.setItem(historyKey, JSON.stringify(messages));
-     }
-     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); 
-  }, [messages, grade, subject]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'file') => {
     const file = e.target.files?.[0];
@@ -81,10 +68,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
     reader.readAsDataURL(file);
   };
 
+  const handleOpenPersonalKey = async () => {
+    if (window.aistudio) {
+      await window.aistudio.openSelectKey();
+      setIsQuotaExceeded(false);
+      alert("✅ تم ربط مفتاحك الخاص بنجاح! سيعمل التطبيق الآن بكفاءة قصوى.");
+      window.location.reload();
+    }
+  };
+
   const handleSend = async (text: string = inputValue, specialPrompt?: string) => {
     const finalQuery = specialPrompt || text;
     if ((!finalQuery.trim() && !selectedAttachment) || isLoading) return;
 
+    setIsQuotaExceeded(false);
     const userMessage: Message = { 
       id: Date.now().toString(), 
       text: finalQuery.trim() || (selectedAttachment?.type === 'image' ? "حل هذه الصورة" : "تحليل ملف"), 
@@ -94,6 +91,23 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
     };
 
     setMessages(prev => [...prev, userMessage]);
+    
+    // تسجيل تفاعل الطالب فوراً في الذاكرة أوفلاين
+    const deviceId = localStorage.getItem('device_id') || 'local';
+    StudentMemory.saveInteraction({
+      interactionId: userMessage.id,
+      studentId: deviceId,
+      type: 'user_text',
+      content: userMessage.text,
+      timestamp: userMessage.timestamp.getTime(),
+      subject: subject,
+      sessionId: 'session_' + deviceId,
+      metadata: { 
+        hasAttachment: !!userMessage.attachment,
+        attachmentType: userMessage.attachment?.type 
+      }
+    });
+
     setInputValue(''); 
     setSelectedAttachment(null);
     setIsLoading(true);
@@ -106,94 +120,169 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ grade, subject, st
         userMessage.text, grade, subject, messages, 
         chunk => { setMessages(prev => prev.map(msg => msg.id === botId ? { ...msg, text: chunk } : msg)); }, 
         userMessage.attachment, 
-        { language: studyLanguage }, 
-        localStorage.getItem('device_id') || 'local'
+        { language: StudyLanguage.ARABIC }, 
+        deviceId
       );
       
       setMessages(prev => prev.map(msg => msg.id === botId ? { ...msg, isStreaming: false } : msg));
-    } catch (err) { 
-      setMessages(prev => [...prev, { id: 'err', text: "حدث خطأ في الاتصال.", sender: Sender.BOT, timestamp: new Date() }]);
+    } catch (err: any) { 
+      if (err?.message?.includes('429') || err?.message?.includes('quota')) {
+        setIsQuotaExceeded(true);
+        setMessages(prev => prev.filter(m => !m.isStreaming));
+        setMessages(prev => [...prev, { 
+          id: 'err-quota', 
+          text: "⚠️ خوادم المعلم مزدحمة جداً الآن (تجاوز الحصة المجانية). يمكنك الانتظار قليلاً أو ربط مفتاحك الخاص لضمان استمرار الخدمة.", 
+          sender: Sender.BOT, 
+          timestamp: new Date() 
+        }]);
+      } else {
+        setMessages(prev => [...prev, { id: 'err', text: "حدث خطأ غير متوقع. يرجى إعادة المحاولة.", sender: Sender.BOT, timestamp: new Date() }]);
+      }
     } finally { setIsLoading(false); }
   };
 
-  const QuickTool = ({ icon: Icon, label, color, onClick }: { icon: any, label: string, color: string, onClick: () => void }) => (
-    <button onClick={onClick} disabled={isLoading} className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border bg-white shadow-sm hover:shadow-md transition-all active:scale-95 shrink-0 whitespace-nowrap ${color} hover:border-current`}>
-      <Icon size={16} />
-      <span className="text-[11px] font-black">{label}</span>
-    </button>
-  );
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const handleInquireLine = (text: string) => {
+    const inquiryText = `ممكن توضح أكتر النقطة دي: "${text.trim()}"`;
+    setInputValue(inquiryText);
+    textareaRef.current?.focus();
+  };
+
+  const lastBotMessage = [...messages].reverse().find(m => m.sender === Sender.BOT && m.text.length > 50);
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50 chat-container" dir={studyLanguage === StudyLanguage.ARABIC ? 'rtl' : 'ltr'}>
+    <div className="flex flex-col h-screen bg-slate-50 font-sans safe-top" dir="rtl">
+      
       <Suspense fallback={null}>
-        <LessonBrowser isOpen={isLessonBrowserOpen} onClose={() => setIsLessonBrowserOpen(false)} grade={grade} subject={subject} studyLanguage={studyLanguage} onPlayVideo={(l, d) => { setCurrentLessonTitle(l); setCurrentVideoData(d); setIsVideoModalOpen(true); }} onExplain={(l) => { setIsLessonBrowserOpen(false); handleSend(undefined, `اشرح درس "${l}" بالتفصيل.`); }} />
+        <LessonBrowser isOpen={isLessonBrowserOpen} onClose={() => setIsLessonBrowserOpen(false)} grade={grade} subject={subject} onPlayVideo={(l, d) => { setCurrentLessonTitle(l); setCurrentVideoData(d); setIsVideoModalOpen(true); }} onExplain={(l) => { setIsLessonBrowserOpen(false); handleSend(undefined, `اشرح درس "${l}" بالتفصيل.`); }} />
         <YouTubeModal isOpen={isVideoModalOpen} onClose={() => setIsVideoModalOpen(false)} videoData={currentVideoData} lessonTitle={currentLessonTitle} />
         <LiveVoiceModal isOpen={isVoiceModalOpen} onClose={() => setIsVoiceModalOpen(false)} grade={grade} subject={subject} />
-        <KnowledgeNotebook isOpen={isNotebookOpen} onClose={() => setIsNotebookOpen(false)} subject={subject} onUseSource={(t) => handleSend(t)} />
-        <FinalMemoModal isOpen={isFinalMemoOpen} onClose={() => setIsFinalMemoOpen(false)} subject={subject} grade={grade} />
+        {isPodcastOpen && lastBotMessage && (
+          <PodcastModal isOpen={isPodcastOpen} onClose={() => setIsPodcastOpen(false)} subject={subject} content={lastBotMessage.text} />
+        )}
       </Suspense>
 
       <input type="file" ref={fileInputRef} hidden accept="*/*" onChange={(e) => handleFileUpload(e, 'file')} />
       <input type="file" ref={cameraInputRef} hidden accept="image/*" capture="environment" onChange={(e) => handleFileUpload(e, 'image')} />
 
-      <header className="bg-white border-b border-slate-200 px-3 py-3 flex justify-between items-center shadow-sm sticky top-0 z-20 no-print">
-        <div className="flex items-center gap-2 flex-1">
-          <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-full"><ChevronRight size={24} /></button>
-          <div>
-            <h1 className="text-lg font-bold text-slate-800 truncate leading-tight flex items-center gap-1.5">
+      {/* Header */}
+      <header className="bg-white border-b border-slate-200 px-4 py-3 flex justify-between items-center sticky top-0 z-30 shadow-sm no-print">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="p-2 bg-slate-50 rounded-xl text-slate-800"><ChevronRight size={22} /></button>
+          <div className="text-right">
+             <h1 className="text-base font-black text-slate-900 leading-tight flex items-center gap-1">
                {subject} <ShieldCheck size={14} className="text-emerald-500" />
-            </h1>
-            <p className="text-[10px] text-indigo-600 font-black tracking-tight">وضع الأرشفة الذكي مفعل ✅</p>
+             </h1>
+             <div className="flex items-center gap-1">
+                <div className={`w-1.5 h-1.5 rounded-full ${isQuotaExceeded ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 animate-pulse'}`}></div>
+                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+                  {isQuotaExceeded ? 'System Overloaded' : 'Active System 2026'}
+                </span>
+             </div>
           </div>
         </div>
         
         <div className="flex gap-2">
-            <button onClick={() => setIsFinalMemoOpen(true)} className="p-2.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100 transition-all shadow-sm" title="عصارة ليلة الامتحان">
-                <Star size={22} className="animate-pulse" />
-            </button>
-            <button onClick={() => setIsLessonBrowserOpen(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-md">
-                <List size={18} />
-                <span className="hidden sm:inline">المنهج</span>
+            <button onClick={() => setIsLessonBrowserOpen(true)} className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-indigo-600 text-white font-black text-[10px] shadow-lg shadow-indigo-100 active:scale-95 transition-all">
+                <List size={16} />
+                <span>المنهج</span>
             </button>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide no-print">
-        {messages.map(msg => <MessageBubble key={msg.id} message={msg} subject={subject} onQuote={(t) => setInputValue(`اشرح لي أكتر عن "${t}"`)} />)}
+      {isQuotaExceeded && (
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 flex flex-col md:flex-row items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
+           <div className="flex items-center gap-2 text-amber-800 text-xs font-black">
+              <AlertTriangle size={18} />
+              <span>خوادم Gemini المجانية مزدحمة الآن!</span>
+           </div>
+           <button 
+             onClick={handleOpenPersonalKey}
+             className="bg-amber-600 text-white px-4 py-2 rounded-xl text-[10px] font-black flex items-center gap-2 shadow-lg shadow-amber-100 hover:bg-amber-700 transition-all"
+           >
+              <Key size={14} />
+              استخدم مفتاحك الخاص مجاناً
+           </button>
+        </div>
+      )}
+
+      {/* Chat Space */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
+        {messages.map(msg => (
+          <MessageBubble key={msg.id} message={msg} subject={subject} onQuote={handleInquireLine} />
+        ))}
+        {isLoading && (
+          <div className="flex justify-start px-4">
+             <div className="bg-white border border-slate-100 p-4 rounded-2xl flex items-center gap-3 shadow-sm">
+                <div className="flex gap-1">
+                   <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce"></div>
+                   <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                   <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                </div>
+                <span className="text-[10px] font-black text-slate-400 uppercase">Doctor is thinking...</span>
+             </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 bg-white border-t border-slate-200 space-y-4 shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.05)] no-print">
+      {/* Input Section */}
+      <div className="p-4 bg-white border-t border-slate-200 safe-bottom no-print">
         {selectedAttachment && (
-            <div className="flex items-center gap-2 bg-indigo-50 p-2 rounded-xl border border-indigo-100 animate-in slide-in-from-bottom-2">
-                <div className="bg-indigo-600 p-2 rounded-lg text-white">
-                    {selectedAttachment.type === 'image' ? <ImageIcon size={16} /> : <Paperclip size={16} />}
+            <div className="flex items-center gap-3 bg-indigo-50 p-3 rounded-2xl border border-indigo-100 mb-3 animate-in slide-in-from-bottom-2">
+                <div className="bg-indigo-600 p-2 rounded-xl text-white">
+                    {selectedAttachment.type === 'image' ? <ImageIcon size={18} /> : <Paperclip size={18} />}
                 </div>
-                <span className="text-xs font-bold text-indigo-700 flex-1 truncate">{selectedAttachment.name || "مرفق جديد"}</span>
-                <button onClick={() => setSelectedAttachment(null)} className="p-1 text-red-500"><X size={16}/></button>
+                <span className="text-[10px] font-black text-indigo-700 flex-1 truncate">{selectedAttachment.name || "مرفق جديد"}</span>
+                <button onClick={() => setSelectedAttachment(null)} className="p-2 bg-indigo-100 rounded-full text-indigo-600"><X size={16}/></button>
             </div>
         )}
 
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-          <QuickTool icon={Star} label="عصارة الامتحان" color="text-amber-600 bg-amber-50" onClick={() => setIsFinalMemoOpen(true)} />
-          <QuickTool icon={PenTool} label="أسئلة الدرس" color="text-emerald-600 bg-emerald-50" onClick={() => handleSend(undefined, "ولد لي 5 أسئلة MCQ على الدرس الأخير.")} />
-          <QuickTool icon={Target} label="بنك المنهج" color="text-red-600 bg-red-50" onClick={() => handleSend(undefined, "ولد لي اختبار شامل على المنهج.")} />
-          <QuickTool icon={Database} label="المحفوظات" color="text-indigo-600 bg-indigo-50" onClick={() => setIsNotebookOpen(true)} />
+        <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide">
+          <QuickAction icon={Headphones} label="بودكاست الشرح" onClick={() => { if (lastBotMessage) setIsPodcastOpen(true); else alert("اسأل المعلم أولاً ليتمكن من إنشاء بودكاست لك!"); }} color="text-indigo-600 bg-indigo-50 border-indigo-100 animate-pulse" />
+          <QuickAction icon={Star} label="عصارة الامتحان" onClick={() => handleSend(undefined, "أريد عصارة ليلة الامتحان في هذا الجزء.")} color="text-amber-600 bg-amber-50" />
+          <QuickAction icon={PenTool} label="توقع سؤال" onClick={() => handleSend(undefined, "توقع لي سؤال امتحان على ما شرحته.")} color="text-emerald-600 bg-emerald-50" />
+          <QuickAction icon={BookOpen} label="ملخص الدرس" onClick={() => handleSend(undefined, "لخص لي الدرس في 5 نقاط ذهبية.")} color="text-indigo-600 bg-indigo-50" />
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex gap-1">
-            <button onClick={() => setIsVoiceModalOpen(true)} className="p-3.5 bg-indigo-600 text-white rounded-2xl shadow-lg hover:scale-105 transition-all"><Mic size={24} /></button>
-            <button onClick={() => cameraInputRef.current?.click()} className="p-3.5 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all"><Camera size={24} /></button>
-            <button onClick={() => fileInputRef.current?.click()} className="p-3.5 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all"><Paperclip size={24} /></button>
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1.5">
+            <button onClick={() => setIsVoiceModalOpen(true)} className="p-4 bg-indigo-600 text-white rounded-[1.5rem] shadow-xl shadow-indigo-100 active:scale-90 transition-all"><Mic size={22} /></button>
+            <button onClick={() => fileInputRef.current?.click()} className="p-4 bg-slate-100 text-slate-600 rounded-[1.5rem] hover:bg-slate-200 active:scale-90 transition-all"><Paperclip size={22} /></button>
+            <button onClick={() => cameraInputRef.current?.click()} className="p-4 bg-slate-100 text-slate-600 rounded-[1.5rem] hover:bg-slate-200 active:scale-90 transition-all"><Camera size={22} /></button>
           </div>
           
           <div className="flex-1 relative flex items-center">
-            <textarea ref={textareaRef} value={inputValue} onChange={e => setInputValue(e.target.value)} placeholder="اسأل المعلمة..." className="w-full bg-slate-50 border-none rounded-2xl px-4 py-4 h-[58px] font-bold text-sm shadow-inner resize-none overflow-hidden" />
-            <button onClick={() => handleSend()} className="absolute left-2.5 p-2.5 bg-indigo-600 text-white rounded-xl shadow-md"><Send size={20} className="rotate-[-180deg]" /></button>
+            <textarea 
+              ref={textareaRef} 
+              value={inputValue} 
+              onChange={e => setInputValue(e.target.value)} 
+              onKeyDown={handleKeyDown}
+              placeholder="اسأل الدكتور..." 
+              className="w-full bg-slate-100/50 border-none rounded-[1.5rem] px-5 py-4 h-[60px] font-bold text-base shadow-inner focus:ring-2 focus:ring-indigo-100 transition-all resize-none overflow-hidden" 
+            />
+            <button 
+               onClick={() => handleSend()} 
+               className={`absolute left-2.5 p-2.5 rounded-2xl transition-all ${inputValue.trim() || selectedAttachment ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-200 text-slate-400'}`}
+            >
+                <Send size={20} className="rotate-[-180deg]" />
+            </button>
           </div>
         </div>
       </div>
     </div>
   );
 };
+
+const QuickAction = ({ icon: Icon, label, color, onClick }: any) => (
+  <button onClick={onClick} className={`flex items-center gap-3 px-6 py-3.5 rounded-[1.4rem] border-2 border-transparent hover:border-current transition-all active:scale-95 shrink-0 whitespace-nowrap shadow-sm ${color}`}>
+     <Icon size={20} />
+     <span className="text-[15px] font-black">{label}</span>
+  </button>
+);
