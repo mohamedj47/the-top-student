@@ -1,76 +1,30 @@
 
 import { Message, GradeLevel, Subject, Attachment, GenerationOptions, Sender, StudyLanguage } from "../types";
 import { GoogleGenAI, Modality } from "@google/genai";
-import { questionsBank, localContentRepository, StaticQuestion, StaticContent } from "../lib/questionsBank";
+import { questionsBank, StaticQuestion } from "../lib/questionsBank";
 import { DynamicQuestionBank } from "../lib/dynamicBank";
-import { getApiKey, markKeyAsFailed } from "../utils/apiKeyManager";
-import { AudioCache } from "../lib/audioCache";
-import { StudentMemory } from "../lib/studentMemory";
+import { markKeyAsFailed, getAvailableKeys } from "../utils/apiKeyManager";
+import { getCurriculumStringForAI } from "../components/data/curriculum";
 
-let nextStartTime = 0;
-let isGlobalSpeaking = false;
-
-/**
- * تنظيف النصوص من علامات الدولار ورموز الرياضيات الزائدة لضمان عرض ونطق نظيف
- * تم تحويل التعبير المنتظم لصيغة سلسلة نصية لتجنب أخطاء المتصفح (Invalid or unexpected token)
- */
 export function cleanMathNotation(text: string): string {
   if (!text) return "";
-  const dollarChar = String.fromCharCode(36);
-  // تنظيف علامات الدولار والرموز بشكل آمن تماماً عبر استبدال السلاسل النصية
-  let cleaned = text.split(dollarChar).join('');
-  cleaned = cleaned.replace(/\\\(/g, '').replace(/\\\)/g, '').replace(/\\\[/g, '').replace(/\\\]/g, '');
-  cleaned = cleaned.replace(/[*_#`~]/g, '');
-  return cleaned.trim();
+  return text.replace(/\$/g, '');
 }
 
-/**
- * محرك تنفيذ طلبات Gemini المقاوم للفشل مع تدوير المفاتيح بشكل مكثف
- */
-async function executeGeminiWithRetry(params: any, type: 'generateContent' | 'generateContentStream' = 'generateContent', maxRetries = 10) {
-  let lastError: any;
-  
-  for (let i = 0; i < maxRetries; i++) {
-    const currentKey = getApiKey();
-    if (currentKey === "BLOCKED") throw new Error("Subscription Required");
-    if (!currentKey) throw new Error("API Keys Missing");
-    
-    const ai = new GoogleGenAI({ apiKey: currentKey });
-    
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); 
-
-      let result;
-      if (type === 'generateContentStream') {
-        result = await ai.models.generateContentStream(params);
-      } else {
-        result = await ai.models.generateContent(params);
-        if (!result || !result.text) {
-          throw new Error("EMPTY_RESPONSE");
-        }
-      }
-      
-      clearTimeout(timeoutId);
-      return result;
-    } catch (e: any) {
-      lastError = e;
-      const errorStr = String(e).toLowerCase();
-      
-      if (errorStr.includes('429') || errorStr.includes('500') || errorStr.includes('internal') || errorStr.includes('fetch') || errorStr.includes('empty')) {
-        markKeyAsFailed(currentKey);
-        await new Promise(r => setTimeout(r, 400));
-        continue;
-      }
-
-      if (errorStr.includes('audioout') || errorStr.includes('not supported')) {
-        throw new Error("TTS_REJECTED");
-      }
-
-      throw e;
-    }
-  }
-  throw lastError;
+export function sanitizeForSpeech(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/#{1,6}\s?/g, '') 
+    .replace(/\*\*/g, '')      
+    .replace(/\*/g, '')        
+    .replace(/__/g, '')        
+    .replace(/`/g, '')         
+    .replace(/\$/g, '')        
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') 
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')    
+    .replace(/- /g, ' ')       
+    .replace(/\n/g, ' ')       
+    .trim();
 }
 
 export function decodeBase64(base64: string): Uint8Array {
@@ -102,164 +56,157 @@ export async function decodePcmAudio(
   return buffer;
 }
 
-export async function speakLongTextGemini(text: string, voiceName: string = 'Kore', onStart?: () => void, onEnd?: () => void): Promise<void> {
-  if (isGlobalSpeaking) {
-    window.speechSynthesis?.cancel();
-    isGlobalSpeaking = false;
-  }
+// Search for a matching static question in the pre-defined bank
+export function searchInStaticBank(query: string): StaticQuestion | null {
+  if (!query) return null;
+  const normalizedQuery = query.toLowerCase().trim();
+  return questionsBank.find(q => 
+    normalizedQuery.includes(q.question.toLowerCase()) || 
+    q.question.toLowerCase().includes(normalizedQuery)
+  ) || null;
+}
 
-  const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-  const ctx = new AudioContextClass({ sampleRate: 24000 });
-  nextStartTime = ctx.currentTime;
-  isGlobalSpeaking = true;
-  onStart?.();
+/**
+ * بودكاست المعلم ونهى - النسخة الكاملة
+ * المعلم: أسلوب أسامة منير (Fenrir)
+ * نهى: طالبة ذكية (Puck)
+ */
+export async function generatePodcastAudio(topic: string, content: string): Promise<string | null> {
+  const availableKeys = getAvailableKeys();
+  if (availableKeys.length === 0) return null;
 
-  const cleanText = cleanMathNotation(text);
-  const chunks = cleanText.split(/[.،؟!?\n]+/).filter(c => c.trim().length > 2);
-
-  for (const chunk of chunks) {
-    if (!isGlobalSpeaking) break;
-    
+  for (const apiKey of availableKeys) {
     try {
-      const response: any = await executeGeminiWithRetry({
+      const ai = new GoogleGenAI({ apiKey });
+      // برومبت مكثف لضمان التفاعل بين الصوتين وتغطية كامل النص
+      const prompt = `أنت صانع بودكاست إذاعي محترف. حول كامل محتوى درس "${topic}" إلى حوار بودكاست مصري "كامل وشامل" لا يترك أي تفصيلة.
+        الحوار يجب أن يكون بين شخصيتين فقط:
+        1. "المعلم": رجل ذو صوت هادئ، عميق، وقور، وأجش قوي (مثل أسلوب أسامة منير في الإذاعة)، يشرح بتمكن وهدوء.
+        2. "نهى": فتاة طالبة ذكية، صوتها رقيق ومتحمس، تسأل عن التفاصيل وتلخص ما فهمته بذكاء.
+        يجب أن يتناوب الصوتين (المعلم ونهى) في شرح كل نقطة وكل سطر في المحتوى التالي حتى النهاية:
+        ${content}`;
+
+      const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: chunk.trim() }] }],
+        contents: [{ parts: [{ text: prompt }] }],
         config: {
           responseModalities: [Modality.AUDIO],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
+          speechConfig: {
+            multiSpeakerVoiceConfig: {
+              speakerVoiceConfigs: [
+                { speaker: 'Teacher', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Fenrir' } } },
+                { speaker: 'Student', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
+              ]
+            }
+          },
         },
       });
 
-      const audioBase64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (audioBase64) {
-        const buffer = await decodePcmAudio(decodeBase64(audioBase64), ctx, 24000, 1);
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(ctx.destination);
-        const start = Math.max(ctx.currentTime, nextStartTime);
-        source.start(start);
-        nextStartTime = start + buffer.duration;
-        
-        const waitTime = (nextStartTime - ctx.currentTime) * 1000;
-        if (waitTime > 0) await new Promise(r => setTimeout(r, waitTime - 100));
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+      if (audioPart?.inlineData?.data) return audioPart.inlineData.data;
+    } catch (e: any) {
+      if (e?.message?.includes('429')) {
+        markKeyAsFailed(apiKey);
+        continue;
       }
-    } catch (e) {
-      await new Promise<void>((resolve) => {
-        const utterance = new SpeechSynthesisUtterance(chunk);
-        utterance.lang = 'ar-EG';
-        utterance.onend = () => resolve();
-        utterance.onerror = () => resolve();
-        window.speechSynthesis.speak(utterance);
-      });
     }
   }
-
-  isGlobalSpeaking = false;
-  onEnd?.();
+  return null;
 }
 
-export async function generatePodcastData(subject: string, content: string): Promise<{ audio?: string; script: string }> {
-  const cacheKey = AudioCache.generateKey(`podcast_v10_${subject}_${content.substring(0, 50)}`);
-  const cached = await AudioCache.get(cacheKey);
-  if (cached) return JSON.parse(cached);
-
-  let script = "";
-  try {
-    const scriptResponse: any = await executeGeminiWithRetry({
-      model: 'gemini-3-flash-preview',
-      contents: [{ parts: [{ text: `حول النص التعليمي التالي إلى سكريبت بودكاست مصري تفاعلي ومرح بين كريم ونهى: "${content}"` }] }],
-    });
-    script = scriptResponse.text || "";
-  } catch (e) {
-    script = `Karim: ركزي يا نهى. \nNoha: تمام. ${content}`;
+export async function generateGeminiSpeech(text: string): Promise<string | null> {
+  const availableKeys = getAvailableKeys();
+  for (const apiKey of availableKeys) {
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: text }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Fenrir' } },
+          },
+        },
+      });
+      const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (audioData) return audioData;
+    } catch (e: any) {
+      if (e?.message?.includes('429')) markKeyAsFailed(apiKey);
+    }
   }
-
-  try {
-    const ttsResponse: any = await executeGeminiWithRetry({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: script }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          multiSpeakerVoiceConfig: {
-            speakerVoiceConfigs: [
-              { speaker: 'Karim', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
-              { speaker: 'Noha', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
-            ]
-          }
-        }
-      }
-    });
-
-    const audio = ttsResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
-    const result = { audio, script };
-    await AudioCache.save(cacheKey, JSON.stringify(result));
-    return result;
-  } catch (e) {
-    return { script };
-  }
-}
-
-export function searchInStaticBank(query: string): StaticQuestion | undefined {
-  const normalizedQuery = query.toLowerCase();
-  return questionsBank.find(item => 
-    normalizedQuery.includes(item.question.toLowerCase()) || 
-    item.question.toLowerCase().includes(normalizedQuery)
-  );
-}
-
-export async function generateFinalMemo(subject: Subject, grade: GradeLevel): Promise<string> {
-  const prompt = `أنت معلم خبير في المنهج المصري. قم بكتابة "عصارة الامتحان" لمادة ${subject} للصف ${grade}. المحتوى بأسلوب Markdown.`;
-  const response: any = await executeGeminiWithRetry({
-    model: 'gemini-3-flash-preview',
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-  });
-  return response.text || "عذراً، فشل توليد العصارة حالياً.";
-}
-
-export async function generateTeacherPrep(grade: GradeLevel, subject: Subject, lesson: string): Promise<string> {
-  const prompt = `بصفتك معلم خبير، قم بإعداد "دفتر تحضير دروس" احترافي ومنظم لدرس "${lesson}" في مادة ${subject} للصف ${grade} بأسلوب Markdown.`;
-  const response: any = await executeGeminiWithRetry({
-    model: 'gemini-3-flash-preview',
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-  });
-  return response.text || "فشل توليد التحضير.";
+  return null;
 }
 
 export async function generateStreamResponse(
   userMessage: string, grade: GradeLevel, subject: Subject, history: Message[],
   onChunk: (text: string) => void, attachment?: Attachment, options?: GenerationOptions, deviceId?: string
 ): Promise<string> {
-  try {
-    const contents: any[] = history.slice(-6).map(msg => ({
-      role: msg.sender === Sender.USER ? 'user' : 'model',
-      parts: [{ text: msg.text }]
-    }));
-    contents.push({ role: 'user', parts: [{ text: userMessage }] });
+  const studyLang = options?.language || StudyLanguage.ARABIC;
+  const curriculumStr = getCurriculumStringForAI(grade, subject);
+  const availableKeys = getAvailableKeys();
+  
+  for (const apiKey of availableKeys) {
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const parts: any[] = [{ text: userMessage }];
+      if (attachment?.data) {
+        parts.push({ inlineData: { mimeType: attachment.mimeType, data: attachment.data } });
+      }
+      const contents = history.slice(-5).map(msg => ({
+        role: msg.sender === Sender.USER ? 'user' : 'model',
+        parts: [{ text: msg.text }]
+      }));
+      contents.push({ role: "user", parts });
+      let languageContext = studyLang === StudyLanguage.ENGLISH ? "Explain in ENGLISH." : "اشرح بالعربية.";
+      let sysInstr = `أنت معلم مادة ${subject}. ${languageContext} منهج ${grade}: ${curriculumStr}`;
 
-    const responseStream: any = await executeGeminiWithRetry({
-      model: 'gemini-3-flash-preview',
-      contents,
-      config: { 
-        systemInstruction: `أنت "المعلمة الذكية" لطلاب الثانوية العامة في مصر. اشرح مادة ${subject} للصف ${grade} بالعامية المصرية بأسلوب Markdown جذاب.` 
-      },
-    }, 'generateContentStream');
+      const streamResponse = await ai.models.generateContentStream({
+        model: 'gemini-3-flash-preview',
+        contents,
+        config: { systemInstruction: sysInstr, temperature: 0.7 }
+      });
 
-    let fullText = "";
-    for await (const chunk of responseStream) {
-      if (chunk.text) {
-        fullText += chunk.text;
+      let fullText = "";
+      for await (const chunk of streamResponse) {
+        fullText += (chunk.text || "");
         onChunk(cleanMathNotation(fullText));
       }
+      
+      if (fullText.length > 50) {
+        DynamicQuestionBank.add(userMessage, fullText, subject, grade, deviceId || 'local');
+      }
+      return fullText;
+    } catch (error: any) {
+      if (error?.message?.includes('429')) {
+        markKeyAsFailed(apiKey);
+        continue;
+      }
     }
-    
-    // تفعيل ميزة "بنك الطالب": حفظ السؤال والإجابة فورياً للاستخدام المستقبلي وأوفلاين
-    if (fullText && deviceId) {
-      DynamicQuestionBank.add(userMessage, fullText, subject, grade, deviceId).catch(err => {
-        console.debug("Background Bank Sync Deferred");
-      });
-    }
+  }
+  return "عذراً يا بطل، جرب المحاولة مرة أخرى.";
+}
 
-    return fullText;
-  } catch (error) { throw error; }
+export async function streamSpeech(text: string, onComplete?: () => void): Promise<void> {
+  const audioData = await generateGeminiSpeech(text);
+  if (!audioData) {
+    onComplete?.();
+    return;
+  }
+
+  try {
+    const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
+    const ctx = new AudioContextClass({ sampleRate: 24000 });
+    const buffer = await decodePcmAudio(decodeBase64(audioData), ctx, 24000, 1);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.onended = () => {
+      onComplete?.();
+      ctx.close();
+    };
+    source.start();
+  } catch (error) {
+    onComplete?.();
+  }
 }
