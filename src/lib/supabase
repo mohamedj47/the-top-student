@@ -2,21 +2,20 @@
 import { createClient } from '@supabase/supabase-js';
 
 /**
- * الحصول على قيمة متغير البيئة بشكل آمن
- * يدعم Vite و Node/Vercel
+ * جلب متغير البيئة بشكل آمن
+ * يدعم Vite (import.meta.env) و Node/Vercel (process.env)
  */
 function getEnv(key) {
-  // جرب import.meta.env أولًا (Vite)
+  // Vite
   try {
     if (typeof import.meta !== 'undefined' && import.meta.env) {
-      const metaEnv = import.meta.env;
-      return metaEnv[key] || metaEnv[`VITE_${key}`] || '';
+      return import.meta.env[key] || import.meta.env[`VITE_${key}`] || '';
     }
   } catch (e) {
     // تجاهل لو import.meta غير موجود
   }
 
-  // fallback لـ Node/Vercel
+  // Node/Vercel
   if (typeof process !== 'undefined' && process.env) {
     return process.env[key] || '';
   }
@@ -24,31 +23,29 @@ function getEnv(key) {
   return '';
 }
 
-// جلب URL و Key من البيئة
-const supabaseUrl = getEnv('SUPABASE_URL') || getEnv('NEXT_PUBLIC_SUPABASE_URL');
-const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY') || getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+// Supabase URL و ANON KEY
+const supabaseUrl = getEnv('SUPABASE_URL') || getEnv('VITE_SUPABASE_URL') || '';
+const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY') || getEnv('VITE_SUPABASE_ANON_KEY') || '';
 
-// إنشاء العميل أو null لو البيئة ناقصة
-export const supabase =
-  supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http')
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : null;
+// إنشاء العميل أو null إذا البيئة ناقصة
+export const supabase = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
 
-// تحقق الاتصال
-export function isSupabaseConnected() {
-  return !!supabase;
+/**
+ * تحقق إذا Supabase مهيأ وجاهز
+ */
+export function isSupabaseConfigured() {
+  return !!(supabaseUrl && supabaseAnonKey && supabase);
 }
 
-// حالة Supabase كاملة
+/**
+ * تحقق سريع من حالة Supabase (يمكنك التوسع لاحقًا)
+ */
 export function getSupabaseStatus() {
-  const keyStr = supabaseAnonKey || '';
-  const urlStr = supabaseUrl || '';
   return {
-    hasUrl: !!urlStr && urlStr.startsWith('http'),
-    hasKey: !!keyStr && keyStr.length > 20,
-    isConnected: !!supabase,
-    isKeyFormatCorrect: keyStr.startsWith('eyJ'), // JWT
-    isStripeKeyDetected:
-      keyStr.startsWith('sk_') || keyStr.startsWith('pk_') || keyStr.startsWith('sb_')
+    hasUrl: !!supabaseUrl && supabaseUrl.startsWith('http'),
+    hasKey: !!supabaseAnonKey && supabaseAnonKey.length > 20,
+    isConnected: !!supabase
   };
 }
