@@ -4,7 +4,63 @@ const getEnv = (key: string): string => {
   // Try import.meta.env first (Vite standard)
   const meta = import.meta as any;
   if (typeof meta !== 'undefined' && meta.env) {
-    const val = meta.env[key] || meta.env[`VITE_${key}`];
+    const val = meta.env[key] || meta.env[`VITE_${key}`]; // src/lib/supabase.ts
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+/**
+ * الحصول على قيمة متغير البيئة بشكل آمن
+ * يدعم Vite (import.meta.env) و Node/Vercel (process.env)
+ */
+function getEnv(key: string): string {
+  // Vite standard
+  try {
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+      const metaEnv = (import.meta as any).env;
+      return metaEnv[key] || metaEnv[`VITE_${key}`] || '';
+    }
+  } catch (e) {
+    // تجاهل الخطأ لو import.meta غير موجود
+  }
+
+  // Node / Vercel standard
+  if (typeof process !== 'undefined' && process.env) {
+    return (process.env as any)[key] || '';
+  }
+
+  return '';
+}
+
+// جلب URL و ANON KEY من البيئة
+const supabaseUrl = getEnv('SUPABASE_URL') || getEnv('NEXT_PUBLIC_SUPABASE_URL');
+const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY') || getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+
+// إنشاء عميل Supabase أو null لو البيئة ناقصة
+export const supabase: SupabaseClient | null =
+  supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http')
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
+
+/**
+ * للتحقق إذا Supabase متصل
+ */
+export const isSupabaseConnected = (): boolean => !!supabase;
+
+/**
+ * فحص حالة Supabase بالتفصيل
+ */
+export const getSupabaseStatus = () => {
+  const keyStr = supabaseAnonKey || '';
+  const urlStr = supabaseUrl || '';
+  return {
+    hasUrl: !!urlStr && urlStr.startsWith('http'),
+    hasKey: !!keyStr && keyStr.length > 20,
+    isConnected: !!supabase,
+    isKeyFormatCorrect: keyStr.startsWith('eyJ'), // JWT
+    isStripeKeyDetected:
+      keyStr.startsWith('sk_') || keyStr.startsWith('pk_') || keyStr.startsWith('sb_')
+  };
+};
+
     if (val) return val;
   }
   
