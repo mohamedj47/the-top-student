@@ -1,17 +1,34 @@
-
-import { Subject, GradeLevel } from './types';
+import type { Subject, GradeLevel } from './types';
 import { supabase, isSupabaseConfigured } from './supabase';
 
-export const ACTIVATION_SALT = "SMART_EDU_EGYPT_2026";
+export const ACTIVATION_SALT = 'SMART_EDU_EGYPT_2026';
 
+/**
+ * توليد كود التفعيل (آمن للـ Browser و Vercel)
+ */
 export function generateActivationCode(deviceId: string): string {
-  if (!deviceId) return "";
-  const cleanId = deviceId.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+  if (!deviceId) return '';
+
+  const cleanId = deviceId
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, '');
+
   const input = cleanId + ACTIVATION_SALT;
-  const base64 = btoa(input);
-  const code = base64.replace(/[^A-Z0-9]/gi, '').toUpperCase().substring(0, 12);
-  return code;
+
+  // بديل آمن لـ btoa
+  const encoded =
+    typeof window !== 'undefined'
+      ? window.btoa(input)
+      : Buffer.from(input).toString('base64');
+
+  return encoded
+    .replace(/[^A-Z0-9]/gi, '')
+    .toUpperCase()
+    .substring(0, 12);
 }
+
+/* ===================== TYPES ===================== */
 
 export interface DynamicQuestion {
   id?: string;
@@ -25,6 +42,8 @@ export interface DynamicQuestion {
   category: 'explanation' | 'exam' | 'summary' | 'general';
 }
 
+/* ===================== BANK ===================== */
+
 export class DynamicQuestionBank {
   private static STORAGE_KEY = 'edu_dynamic_bank_v2';
 
@@ -34,123 +53,156 @@ export class DynamicQuestionBank {
     return data ? JSON.parse(data) : [];
   }
 
-  /**
-   * مزامنة البيانات المحلية مع Supabase
-   */
+  /* ---------- Sync ---------- */
   static async syncWithCloud() {
-    if (!isSupabaseConfigured()) return;
-    
+    if (!isSupabaseConfigured() || !supabase) return;
+
     const localData = this.getAll();
-    if (localData.length === 0) return;
+    if (!localData.length) return;
 
     try {
-      // رفع الأسئلة الجديدة التي لم ترفع بعد
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('dynamic_questions')
-        .upsert(localData.map(q => ({
-          question: q.question,
-          answer: q.answer,
-          subject: q.subject,
-          grade: q.grade,
-          category: q.category,
-          times_asked: q.timesAsked,
-          metadata: { askedBy: q.askedBy }
-        })), { onConflict: 'question' });
-        
+        .upsert(
+          localData.map(q => ({
+            question: q.question,
+            answer: q.answer,
+            subject: q.subject,
+            grade: q.grade,
+            category: q.category,
+            times_asked: q.timesAsked,
+            metadata: { askedBy: q.askedBy }
+          })),
+          { onConflict: 'question' }
+        );
+
       if (error) throw error;
       console.log('✅ Cloud Sync Successful');
     } catch (e) {
-      console.error('❌ Cloud Sync Failed:', e);
+      console.error('❌ Cloud Sync Failed', e);
     }
   }
 
-  static async search(query: string, subject: string): Promise<DynamicQuestion | null> {
+  /* ---------- Search ---------- */
+  static async search(
+    query: string,
+    subject: string
+  ): Promise<DynamicQuestion | null> {
     const bank = this.getAll();
-    const normalizedQuery = query.trim().toLowerCase();
-    
-    // أولاً: البحث المحلي للسرعة
-    const exactMatch = bank.find(item => 
-      item.subject === subject && 
-      (normalizedQuery.includes(item.question.toLowerCase()) || item.question.toLowerCase().includes(normalizedQuery))
+    const normalized = query.trim().toLowerCase();
+
+    const localMatch = bank.find(
+      q =>
+        q.subject === subject &&
+        (q.question.toLowerCase().includes(normalized) ||
+          normalized.includes(q.question.toLowerCase()))
     );
-    if (exactMatch) return exactMatch;
 
-    // ثانياً: إذا كان السحاب مهيأ، ابحث فيه
-    if (isSupabaseConfigured()) {
-        try {
-            const { data, error } = await supabase
-                .from('dynamic_questions')
-                .select('*')
-                .eq('subject', subject)
-                .ilike('question', `%${normalizedQuery}%`)
-                .limit(1)
-                .single();
-            
-            if (data && !error) {
-                return {
-                    question: data.question,
-                    answer: data.answer,
-                    subject: data.subject,
-                    grade: data.grade,
-                    timestamp: new Date(data.created_at).getTime(),
-                    timesAsked: data.times_asked,
-                    askedBy: data.metadata?.askedBy || [],
-                    category: data.category
-                };
-            }
-        } catch (e) {}
+    if (localMatch) return localMatch;
+
+    if (!isSupabaseConfigured() || !supabase) return null;
+
+    try {
+      const { data, error } = await supabase
+        .from('dynamic_questions')
+        .select('*')
+        .eq('subject', subject)
+        .ilike('question', `%${normalized}%`)
+        .limit(1)
+        .single();
+
+      if (error || !data) return null;
+
+      return {
+        question: data.question,
+        answer: data.answer,
+        subject: data.subject,
+        grade: data.grade,
+        timestamp: new Date(data.created_at).getTime(),
+        timesAsked: data.times_asked,
+        askedBy: data.metadata?.askedBy || [],
+        category: data.category
+      };
+    } catch {
+      return null;
     }
-
-    return null;
   }
 
-  static async add(question: string, answer: string, subject: string, grade: string, deviceId: string) {
+  /* ---------- Add ---------- */
+  static async add(
+    question: string,
+    answer: string,
+    subject: string,
+    grade: string,
+    deviceId: string
+  ) {
     const bank = this.getAll();
+
     let category: DynamicQuestion['category'] = 'general';
     const q = question.toLowerCase();
     if (q.includes('امتحان') || q.includes('نموذج')) category = 'exam';
-    else if (q.includes('عصارة') || q.includes('ملخص') || q.includes('مذكرة')) category = 'summary';
+    else if (q.includes('ملخص') || q.includes('مذكرة')) category = 'summary';
     else if (q.includes('اشرح') || q.includes('شرح')) category = 'explanation';
 
-    const existingIdx = bank.findIndex(i => i.question === question && i.subject === subject);
-    
-    if (existingIdx !== -1) {
-      if (!bank[existingIdx].askedBy.includes(deviceId)) {
-        bank[existingIdx].askedBy.push(deviceId);
-        bank[existingIdx].timesAsked++;
+    const idx = bank.findIndex(
+      i => i.question === question && i.subject === subject
+    );
+
+    if (idx !== -1) {
+      if (!bank[idx].askedBy.includes(deviceId)) {
+        bank[idx].askedBy.push(deviceId);
+        bank[idx].timesAsked++;
       }
     } else {
-      bank.unshift({ 
-        question, answer, subject, grade, 
-        timestamp: Date.now(), timesAsked: 1, askedBy: [deviceId], category
+      bank.unshift({
+        question,
+        answer,
+        subject,
+        grade,
+        timestamp: Date.now(),
+        timesAsked: 1,
+        askedBy: [deviceId],
+        category
       });
     }
-    
-    const limitedBank = bank.slice(0, 100);
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(limitedBank));
 
-    // محاولة الحفظ في السحابة فوراً
-    if (isSupabaseConfigured()) {
-        await supabase.from('dynamic_questions').upsert({
-            question, answer, subject, grade, category,
-            times_asked: existingIdx !== -1 ? bank[existingIdx].timesAsked : 1,
-            metadata: { askedBy: existingIdx !== -1 ? bank[existingIdx].askedBy : [deviceId] }
-        }, { onConflict: 'question' });
-    }
+    localStorage.setItem(
+      this.STORAGE_KEY,
+      JSON.stringify(bank.slice(0, 100))
+    );
+
+    if (!isSupabaseConfigured() || !supabase) return;
+
+    await supabase.from('dynamic_questions').upsert(
+      {
+        question,
+        answer,
+        subject,
+        grade,
+        category,
+        times_asked: idx !== -1 ? bank[idx].timesAsked : 1,
+        metadata: {
+          askedBy: idx !== -1 ? bank[idx].askedBy : [deviceId]
+        }
+      },
+      { onConflict: 'question' }
+    );
   }
 
-  static async getStats() {
-      const bank = this.getAll();
-      return { 
-          totalQuestions: bank.length, 
-          examsCount: bank.filter(q => q.category === 'exam').length,
-          summariesCount: bank.filter(q => q.category === 'summary').length,
-          popularCount: bank.filter(q => q.timesAsked > 1).length
-      };
+  /* ---------- Stats ---------- */
+  static getStats() {
+    const bank = this.getAll();
+    return {
+      totalQuestions: bank.length,
+      examsCount: bank.filter(q => q.category === 'exam').length,
+      summariesCount: bank.filter(q => q.category === 'summary').length,
+      popularCount: bank.filter(q => q.timesAsked > 1).length
+    };
   }
 
-  static async getPopular(limit: number = 8): Promise<DynamicQuestion[]> {
-      const bank = this.getAll();
-      return [...bank].sort((a, b) => b.timesAsked - a.timesAsked).slice(0, limit);
+  static getPopular(limit = 8): DynamicQuestion[] {
+    return [...this.getAll()]
+      .sort((a, b) => b.timesAsked - a.timesAsked)
+      .slice(0, limit);
   }
 }
