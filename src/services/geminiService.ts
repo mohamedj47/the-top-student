@@ -7,7 +7,7 @@ import { getApiKey, markKeyAsFailed } from "../utils/apiKeyManager";
 import { AudioCache } from "../lib/audioCache";
 import { StudentMemory } from "../lib/studentMemory";
 
-let nextStartTime = 0;
+let nextStartTime = 0;        
 let isGlobalSpeaking = false;
 
 /**
